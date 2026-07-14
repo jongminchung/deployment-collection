@@ -1,0 +1,154 @@
+---
+version: "3"
+
+vars:
+  COLLECTION_FQCN: dev_infra.deployment
+  COLLECTION_VERSION: "0.0.1"
+  COLLECTIONS_PATH: .ansible/collections
+  RELEASE_REMOTE: origin
+  RELEASE_TAG: "0.0.1"
+
+tasks:
+  build:
+    desc: Build and install the local dev_infra.deployment Collection.
+    cmds:
+      - |
+        set -eu
+
+        collection_version="$(awk -F': ' '$1 == "version" {gsub(/"/, "", $2); print $2}' galaxy.yml)"
+        if [ "$collection_version" != "{{.COLLECTION_VERSION}}" ]; then
+          echo "galaxy.yml version must be {{.COLLECTION_VERSION}}, found: $collection_version" >&2
+          exit 1
+        fi
+
+        ansible-galaxy collection build --force --output-path .build
+        ansible-galaxy collection install \
+          --force \
+          -p {{.COLLECTIONS_PATH}} \
+          ".build/dev_infra-deployment-{{.COLLECTION_VERSION}}.tar.gz"
+
+  check:
+    desc: Build, verify, and syntax-check the public Collection lifecycle.
+    cmds:
+      - task: build
+      - |
+        set -eu
+
+        test ! -e playbooks/install.yml
+        test ! -d playbooks/migrations
+        test ! -d roles/ldap
+
+        ansible-galaxy collection verify \
+          {{.COLLECTION_FQCN}} \
+          -p {{.COLLECTIONS_PATH}} \
+          --offline
+
+        for playbook in init bootstrap configure kickstart pull restart uninstall; do
+          test -f "playbooks/$playbook.yml"
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              --syntax-check \
+              "{{.COLLECTION_FQCN}}.$playbook"
+        done
+
+  release:status:
+    desc: Show the main and 0.0.1 local and remote commit SHAs.
+    cmds:
+      - |
+        set -eu
+
+        git fetch {{.RELEASE_REMOTE}} \
+          refs/heads/main:refs/remotes/{{.RELEASE_REMOTE}}/main
+
+        head_sha="$(git rev-parse HEAD)"
+        origin_main_sha="$(git rev-parse {{.RELEASE_REMOTE}}/main)"
+        local_tag_sha="$(git rev-parse '{{.RELEASE_TAG}}^{commit}' 2>/dev/null || true)"
+        remote_refs="$(git ls-remote --tags {{.RELEASE_REMOTE}} \
+          refs/tags/{{.RELEASE_TAG}} 'refs/tags/{{.RELEASE_TAG}}^{}')"
+        remote_tag_sha="$(printf '%s\n' "$remote_refs" | \
+          awk '$2 == "refs/tags/{{.RELEASE_TAG}}^{}" {print $1}')"
+        if [ -z "$remote_tag_sha" ]; then
+          remote_tag_sha="$(printf '%s\n' "$remote_refs" | \
+            awk '$2 == "refs/tags/{{.RELEASE_TAG}}" {print $1}')"
+        fi
+
+        printf 'HEAD:            %s\n' "$head_sha"
+        printf '{{.RELEASE_REMOTE}}/main:     %s\n' "$origin_main_sha"
+        printf 'local {{.RELEASE_TAG}}:     %s\n' "${local_tag_sha:-<missing>}"
+        printf 'remote {{.RELEASE_TAG}}:    %s\n' "${remote_tag_sha:-<missing>}"
+
+  release:retag:
+    desc: Validate main and safely move the mutable 0.0.1 tag to HEAD.
+    prompt: Move the remote 0.0.1 tag to the verified main HEAD?
+    cmds:
+      - |
+        set -eu
+
+        if [ "$(git branch --show-current)" != "main" ]; then
+          echo "release:retag must run on main." >&2
+          exit 1
+        fi
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "release:retag requires a clean worktree." >&2
+          exit 1
+        fi
+
+        git fetch {{.RELEASE_REMOTE}} \
+          refs/heads/main:refs/remotes/{{.RELEASE_REMOTE}}/main
+        if [ "$(git rev-parse HEAD)" != "$(git rev-parse {{.RELEASE_REMOTE}}/main)" ]; then
+          echo "HEAD must match {{.RELEASE_REMOTE}}/main before release." >&2
+          exit 1
+        fi
+      - task: check
+      - |
+        set -eu
+
+        git fetch {{.RELEASE_REMOTE}} \
+          refs/heads/main:refs/remotes/{{.RELEASE_REMOTE}}/main
+        head_sha="$(git rev-parse HEAD)"
+        if [ "$head_sha" != "$(git rev-parse {{.RELEASE_REMOTE}}/main)" ]; then
+          echo "{{.RELEASE_REMOTE}}/main changed during validation; rerun release:retag." >&2
+          exit 1
+        fi
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Worktree changed during validation; rerun release:retag." >&2
+          exit 1
+        fi
+
+        remote_ref_sha="$(git ls-remote --tags {{.RELEASE_REMOTE}} \
+          refs/tags/{{.RELEASE_TAG}} | awk '$2 == "refs/tags/{{.RELEASE_TAG}}" {print $1}')"
+        old_local_tag_sha="$(git rev-parse '{{.RELEASE_TAG}}^{commit}' 2>/dev/null || true)"
+
+        git tag -f {{.RELEASE_TAG}} "$head_sha"
+        if [ -n "$remote_ref_sha" ]; then
+          if ! git push \
+            "--force-with-lease=refs/tags/{{.RELEASE_TAG}}:$remote_ref_sha" \
+            {{.RELEASE_REMOTE}} \
+            refs/tags/{{.RELEASE_TAG}}:refs/tags/{{.RELEASE_TAG}}; then
+            if [ -n "$old_local_tag_sha" ]; then
+              git tag -f {{.RELEASE_TAG}} "$old_local_tag_sha"
+            else
+              git tag -d {{.RELEASE_TAG}}
+            fi
+            exit 1
+          fi
+        else
+          git push {{.RELEASE_REMOTE}} \
+            refs/tags/{{.RELEASE_TAG}}:refs/tags/{{.RELEASE_TAG}}
+        fi
+
+        remote_refs="$(git ls-remote --tags {{.RELEASE_REMOTE}} \
+          refs/tags/{{.RELEASE_TAG}} 'refs/tags/{{.RELEASE_TAG}}^{}')"
+        remote_tag_sha="$(printf '%s\n' "$remote_refs" | \
+          awk '$2 == "refs/tags/{{.RELEASE_TAG}}^{}" {print $1}')"
+        if [ -z "$remote_tag_sha" ]; then
+          remote_tag_sha="$(printf '%s\n' "$remote_refs" | \
+            awk '$2 == "refs/tags/{{.RELEASE_TAG}}" {print $1}')"
+        fi
+        if [ "$remote_tag_sha" != "$head_sha" ]; then
+          echo "Remote {{.RELEASE_TAG}} does not match the released HEAD." >&2
+          exit 1
+        fi
+
+        echo "Released {{.RELEASE_TAG}} at $head_sha"
