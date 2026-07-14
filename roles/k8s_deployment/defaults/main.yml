@@ -1,0 +1,25 @@
+---
+dev_infra_deployment_staging_root: /opt/dev-infra-deployment
+dev_infra_deployment_artifacts_root: "{{ dev_infra_deployment_staging_root }}/artifacts"
+dev_infra_deployment_python_venv: /opt/dev-infra-deployment/ansible-venv
+dev_infra_deployment_python_interpreter: "{{ dev_infra_deployment_python_venv }}/bin/python"
+dev_infra_deployment_python_packages:
+  - "kubernetes>=24.2.0"
+  - "PyYAML>=3.11"
+  - jsonpatch
+dev_infra_deployment_helm_bin: /usr/local/bin/helm
+dev_infra_deployment_kubectl_bin: /var/lib/rancher/rke2/bin/kubectl
+dev_infra_deployment_kubeconfig: /etc/rancher/rke2/rke2.yaml
+dev_infra_deployment_wait_timeout: 5m
+dev_infra_deployment_wait_timeout_seconds: 300
+dev_infra_deployment_long_wait_timeout: 10m
+dev_infra_deployment_long_wait_timeout_seconds: 600
+dev_infra_deployment_job_delete_timeout_seconds: 60
+dev_infra_deployment_job_wait_sleep_seconds: 5
+dev_infra_deployment_rollout_wait_sleep_seconds: 5
+dev_infra_deployment_pod_wait_sleep_seconds: 5
+dev_infra_deployment_rke2_images_dir: /var/lib/rancher/rke2/agent/images
+dev_infra_deployment_crictl_bin: /var/lib/rancher/rke2/bin/crictl
+dev_infra_deployment_crictl_config: /var/lib/rancher/rke2/agent/etc/crictl.yaml
+dev_infra_deployment_image_refs: []
+dev_infra_deployment_image_file_name: dev-infra-deployment.txt

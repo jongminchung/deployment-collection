@@ -1,0 +1,55 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ apisix_gateway_class_name }}
+spec:
+  controllerName: {{ apisix_controller_name }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ apisix_gateway_name }}
+  namespace: {{ apisix_namespace }}
+{% if apisix_gateway_annotations_resolved | length > 0 %}
+  annotations:
+{% for annotation_key, annotation_value in apisix_gateway_annotations_resolved.items() %}
+    {{ annotation_key }}: {{ annotation_value | string | quote }}
+{% endfor %}
+{% endif %}
+spec:
+  gatewayClassName: {{ apisix_gateway_class_name }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+{% for https_listener in apisix_gateway_https_listeners_resolved %}
+    - name: {{ https_listener.name }}
+      protocol: HTTPS
+      port: 443
+{% if https_listener.hostname is defined and (https_listener.hostname | string | length > 0) %}
+      hostname: {{ https_listener.hostname | string | quote }}
+{% endif %}
+      tls:
+        mode: Terminate
+        certificateRefs:
+{% for cert_ref in https_listener.certificate_refs %}
+          - name: {{ cert_ref.name }}
+{% if cert_ref.kind is defined %}
+            kind: {{ cert_ref.kind }}
+{% endif %}
+{% if cert_ref.group is defined %}
+            group: {{ cert_ref.group }}
+{% endif %}
+{% endfor %}
+      allowedRoutes:
+        namespaces:
+          from: All
+{% endfor %}
+  infrastructure:
+    parametersRef:
+      group: apisix.apache.org
+      kind: GatewayProxy
+      name: {{ apisix_gateway_proxy_name }}

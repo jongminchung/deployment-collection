@@ -1,0 +1,9 @@
+---
+- name: Initialize deployment controller inputs
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Validate deployment inventory and inline Vault inputs
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.k8s_deployment
+        tasks_from: init

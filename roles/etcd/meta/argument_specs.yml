@@ -1,0 +1,20 @@
+---
+argument_specs:
+  configure:
+    short_description: Configure or update etcd and apply etcd-owned Kubernetes artifacts.
+    options: {}
+  pull:
+    short_description: Pull etcd images into RKE2 containerd.
+    options: {}
+  restart:
+    short_description: Restart etcd workloads explicitly.
+    options: {}
+  uninstall:
+    short_description: Remove etcd release, certificates, and persistent volume claims.
+    options: {}
+  verify:
+    short_description: Verify etcd workload readiness.
+    options: {}
+  stage:
+    short_description: Stage etcd-owned static artifacts on the target host.
+    options: {}

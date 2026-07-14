@@ -1,0 +1,33 @@
+---
+namespace: dev_infra
+name: deployment
+version: "0.0.1"
+readme: README.md
+authors:
+  - dev-infra maintainers
+description: Kubernetes platform and application workload deployment operations.
+license:
+  - MIT
+tags:
+  - infrastructure
+  - kubernetes
+  - devops
+dependencies:
+  ansible.posix: ">=1.5.0"
+  kubernetes.core: ">=6.4.0"
+repository: https://github.com/jongminchung/deployment-collection
+documentation: https://github.com/jongminchung/deployment-collection/blob/main/README.md
+homepage: https://github.com/jongminchung/deployment-collection
+issues: https://github.com/jongminchung/deployment-collection/issues
+build_ignore:
+  - .DS_Store
+  - .git
+  - .git/**
+  - .ansible
+  - .ansible/**
+  - .build
+  - .build/**
+  - .github
+  - .github/**
+  - "*.tar.gz"
+  - "**/*.retry"

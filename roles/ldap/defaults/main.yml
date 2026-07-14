@@ -1,0 +1,7 @@
+---
+dev_infra_deployment_ldap_statefulset_name: ldap
+dev_infra_deployment_ldap_pod_selector: app.kubernetes.io/instance=ldap
+dev_infra_deployment_ldap_user_upsert_secret_name: ldap-user-upsert-credentials
+dev_infra_deployment_ldap_user_upsert_job_name: ldap-user-upsert
+dev_infra_deployment_ldap_timeout: 5m
+dev_infra_deployment_ldap_timeout_seconds: 300

@@ -1,0 +1,62 @@
+---
+transportTlsSecretName: opensearch-transport-tls
+
+openSearchAnnotations:
+  secret.reloader.stakater.com/reload: "opensearch-transport-tls"
+  configmap.reloader.stakater.com/reload: "root-tls-ca-trust-bundle"
+podAnnotations:
+  opensearch.jamie.kr/tls-restart-nonce: ""
+
+secretMounts:
+  - name: transport-tls-source
+    secretName: opensearch-transport-tls
+    path: "/usr/share/opensearch/config/certs/transport"
+    defaultMode: 288
+
+extraVolumes:
+  - name: root-tls-ca-trust-bundle
+    configMap:
+      name: root-tls-ca-trust-bundle
+      items:
+        - key: ca.crt
+          path: ca.crt
+  - name: tls-work
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: tls-work
+    mountPath: "/usr/share/opensearch/config/trust/transport"
+    subPath: transport
+    readOnly: true
+
+extraInitContainers: |
+  - name: tls-bundle
+    image: docker.io/busybox:1.36
+    imagePullPolicy: IfNotPresent
+    command:
+      - sh
+      - -ec
+      - |
+        build_bundle() {
+          target_dir="$1"
+          mkdir -p "$target_dir"
+          cp /source/trust/ca.crt "$target_dir/ca-bundle.crt"
+        }
+        build_bundle /work/transport
+        chown -R 1000:1000 /work
+        chmod -R u=rwX,g=rX,o= /work
+    securityContext:
+      runAsUser: 0
+    volumeMounts:
+      - name: root-tls-ca-trust-bundle
+        mountPath: /source/trust
+        readOnly: true
+      - name: tls-work
+        mountPath: /work
+
+tls:
+  certManager:
+    enabled: false
+  trustBundle:
+    configMapName: root-tls-ca-trust-bundle
+    configMapKey: ca.crt

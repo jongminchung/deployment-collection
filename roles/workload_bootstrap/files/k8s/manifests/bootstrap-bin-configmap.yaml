@@ -1,0 +1,296 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bootstrap-bin
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: helm-bootstrap
+    app.kubernetes.io/managed-by: taskfile
+data:
+  tls-root-ca-converge.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    K=kubectl
+    NAMESPACE=${GABIACLOUD_S3_NAMESPACE:-gabiacloud-s3}
+    VAULT_ADDR=${VAULT_ADDR:-http://vault.vault.svc.cluster.local:8200}
+    TRUST_CONFIGMAP=${TRUST_CONFIGMAP:-root-tls-ca-trust-bundle}
+    TRUST_KEY=${TRUST_KEY:-ca.crt}
+    ROOT_TLS_CA_ISSUER=${ROOT_TLS_CA_ISSUER:-root-tls-ca}
+    RENEW_SELECTOR_KEY=${RENEW_SELECTOR_KEY:-pki.jamie.kr/root-tls-ca-managed}
+    RENEW_SELECTOR_VALUE=${RENEW_SELECTOR_VALUE:-true}
+    RENEW_SELECTOR=${RENEW_SELECTOR:-${RENEW_SELECTOR_KEY}=${RENEW_SELECTOR_VALUE}}
+    CURRENT_ANNOTATION=pki.jamie.kr/current-sha256
+    PREVIOUS_ANNOTATION=pki.jamie.kr/previous-sha256
+    RENEW_MARKER_ANNOTATION=pki.jamie.kr/leaf-renewed-current-sha256
+    MODE=${1:-trust}
+
+    case "$MODE" in
+      trust | renew | all)
+        ;;
+      *)
+        echo "Usage: $0 [trust|renew|all]"
+        exit 2
+        ;;
+    esac
+
+    read_issuer_certificate() {
+      local issuer="$1"
+
+      curl --fail --silent --show-error --location \
+        "$VAULT_ADDR/v1/pki/issuer/$issuer/pem"
+    }
+
+    pem_sha256() {
+      openssl x509 -in "$1" -noout -fingerprint -sha256 |
+        sed 's/.*=//; s/://g' |
+        tr '[:upper:]' '[:lower:]'
+    }
+
+    configmap_annotation() {
+      local key="$1"
+      $K -n "$NAMESPACE" get configmap "$TRUST_CONFIGMAP" -o json 2>/dev/null |
+        jq -r --arg key "$key" '.metadata.annotations[$key] // ""' 2>/dev/null || true
+    }
+
+    set_configmap_annotation() {
+      local key="$1"
+      local value="$2"
+
+      if [ "$(configmap_annotation "$key")" = "$value" ]; then
+        return
+      fi
+
+      $K -n "$NAMESPACE" annotate configmap "$TRUST_CONFIGMAP" \
+        "$key=$value" \
+        --overwrite
+    }
+
+    remove_configmap_annotation() {
+      local key="$1"
+
+      if [ -z "$(configmap_annotation "$key")" ]; then
+        return
+      fi
+
+      $K -n "$NAMESPACE" annotate configmap "$TRUST_CONFIGMAP" \
+        "$key-" \
+        --overwrite
+    }
+
+    certificate_names_by_selector() {
+      $K -n "$NAMESPACE" get certificates \
+        -l "$RENEW_SELECTOR" \
+        -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}'
+    }
+
+    unlabeled_root_tls_ca_certificates() {
+      $K -n "$NAMESPACE" get certificates -o json |
+        jq -r \
+          --arg issuer "$ROOT_TLS_CA_ISSUER" \
+          --arg key "$RENEW_SELECTOR_KEY" \
+          --arg value "$RENEW_SELECTOR_VALUE" \
+          '.items[]
+            | select(.spec.issuerRef.name == $issuer)
+            | select((.spec.issuerRef.kind // "Issuer") == "ClusterIssuer")
+            | select((.metadata.labels[$key] // "") != $value)
+            | .metadata.name'
+    }
+
+    renew_selected_certificates() {
+      local certificates=()
+      local missing_label_certificates=()
+      local cert
+
+      mapfile -t missing_label_certificates < <(unlabeled_root_tls_ca_certificates)
+      if [ "${#missing_label_certificates[@]}" -gt 0 ]; then
+        echo "The following ClusterIssuer/$ROOT_TLS_CA_ISSUER Certificates do not match renew selector '$RENEW_SELECTOR':"
+        printf '  - %s\n' "${missing_label_certificates[@]}"
+        echo "Add label ${RENEW_SELECTOR_KEY}=${RENEW_SELECTOR_VALUE} or adjust RENEW_SELECTOR_KEY/RENEW_SELECTOR_VALUE before rotating leaf certificates."
+        exit 1
+      fi
+
+      mapfile -t certificates < <(certificate_names_by_selector)
+      if [ "${#certificates[@]}" -eq 0 ]; then
+        echo "No Certificates matched renew selector '$RENEW_SELECTOR'; leaf renewal is not required."
+        return
+      fi
+
+      echo "Renewing Certificates with selector '$RENEW_SELECTOR'"
+      cmctl renew --namespace "$NAMESPACE" -l "$RENEW_SELECTOR"
+
+      for cert in "${certificates[@]}"; do
+        [ -n "$cert" ] || continue
+        $K -n "$NAMESPACE" wait --for=condition=Ready "certificate/$cert" --timeout=5m
+      done
+    }
+
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' EXIT
+
+    current_pem="$tmp_dir/current.pem"
+    previous_pem="$tmp_dir/previous.pem"
+    bundle_pem="$tmp_dir/ca.crt"
+
+    if ! read_issuer_certificate current >"$current_pem"; then
+      if ! read_issuer_certificate default >"$current_pem"; then
+        echo "Vault current and default issuer certificates are unavailable."
+        exit 1
+      fi
+    fi
+
+    if [ ! -s "$current_pem" ]; then
+      echo "Vault current issuer certificate is empty."
+      exit 1
+    fi
+
+    has_previous=false
+    if read_issuer_certificate previous >"$previous_pem" && [ -s "$previous_pem" ]; then
+      has_previous=true
+    fi
+
+    current_sha="$(pem_sha256 "$current_pem")"
+    previous_sha=""
+
+    if [ "$has_previous" = "true" ]; then
+      previous_sha="$(pem_sha256 "$previous_pem")"
+      cat "$previous_pem" >"$bundle_pem"
+      printf '\n' >>"$bundle_pem"
+      cat "$current_pem" >>"$bundle_pem"
+    else
+      cat "$current_pem" >"$bundle_pem"
+    fi
+
+    $K -n "$NAMESPACE" create configmap "$TRUST_CONFIGMAP" \
+      --from-file="$TRUST_KEY=$bundle_pem" \
+      --dry-run=client -o yaml | $K apply -f -
+
+    set_configmap_annotation "$CURRENT_ANNOTATION" "$current_sha"
+
+    if [ -n "$previous_sha" ]; then
+      set_configmap_annotation "$PREVIOUS_ANNOTATION" "$previous_sha"
+    else
+      remove_configmap_annotation "$PREVIOUS_ANNOTATION"
+    fi
+
+    echo "Trust bundle converged: current=$current_sha previous=${previous_sha:-none}"
+
+    if [ "$MODE" = "trust" ]; then
+      exit 0
+    fi
+
+    if [ "$has_previous" != "true" ]; then
+      echo "No previous issuer found; leaf renewal is not required."
+      exit 0
+    fi
+
+    renew_marker="$(configmap_annotation "$RENEW_MARKER_ANNOTATION")"
+    if [ "$renew_marker" = "$current_sha" ]; then
+      echo "Leaf certificates already renewed for current=$current_sha"
+      exit 0
+    fi
+
+    if ! command -v cmctl >/dev/null 2>&1; then
+      echo "cmctl is required before leaf certificate renewal."
+      exit 1
+    fi
+
+    renew_selected_certificates
+
+    set_configmap_annotation "$RENEW_MARKER_ANNOTATION" "$current_sha"
+
+    echo "Leaf certificate renewal marker updated: $current_sha"
+  tls-workload-trust-patch.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    K=kubectl
+    NAMESPACE=${GABIACLOUD_S3_NAMESPACE:-gabiacloud-s3}
+    TRUST_CONFIGMAP=${TRUST_CONFIGMAP:-root-tls-ca-trust-bundle}
+    TARGET=${1:-all}
+
+    patch_opensearch() {
+      if ! $K -n "$NAMESPACE" get sts/opensearch >/dev/null 2>&1; then
+        echo "Skipping missing StatefulSet/opensearch"
+        return
+      fi
+
+      local patch
+      patch="$($K -n "$NAMESPACE" get sts/opensearch -o json | jq -c --arg trust "$TRUST_CONFIGMAP" '
+        def root_trust_volume:
+          {
+            "name": "root-tls-ca-trust-bundle",
+            "configMap": {
+              "name": $trust,
+              "items": [
+                {
+                  "key": "ca.crt",
+                  "path": "ca.crt"
+                }
+              ]
+            }
+          };
+
+        def patch_tls_bundle:
+          if .name == "tls-bundle" then
+            .command = [
+              "sh",
+              "-ec",
+              "build_bundle() {\n  target_dir=\"$1\"\n  mkdir -p \"$target_dir\"\n  cp /source/trust/ca.crt \"$target_dir/ca-bundle.crt\"\n}\nbuild_bundle /work/transport\nchown -R 1000:1000 /work\nchmod -R u=rwX,g=rX,o= /work\n"
+            ] |
+            .volumeMounts = [
+              {
+                "name": "root-tls-ca-trust-bundle",
+                "mountPath": "/source/trust",
+                "readOnly": true
+              },
+              {
+                "name": "tls-work",
+                "mountPath": "/work"
+              }
+            ]
+          else
+            .
+          end;
+
+        {
+          "metadata": {
+            "annotations": ((.metadata.annotations // {}) + {
+              "secret.reloader.stakater.com/reload": "opensearch-transport-tls",
+              "configmap.reloader.stakater.com/reload": "root-tls-ca-trust-bundle"
+            })
+          },
+          "spec": {
+            "template": {
+              "spec": {
+                "volumes": (((.spec.template.spec.volumes // []) | map(select(.name != "extra-ca" and .name != "root-tls-ca-trust-bundle"))) + [root_trust_volume]),
+                "initContainers": ((.spec.template.spec.initContainers // []) | map(patch_tls_bundle))
+              }
+            }
+          }
+        }
+      ')"
+
+      $K -n "$NAMESPACE" patch sts/opensearch --type=merge -p "$patch"
+    }
+
+    patch_dashboard() {
+      echo "Skipping Dashboard trust patch; Dashboard uses plaintext workload HTTP."
+    }
+
+    case "$TARGET" in
+      all)
+        patch_opensearch
+        ;;
+      opensearch)
+        patch_opensearch
+        ;;
+      dashboard | opensearch-dashboard)
+        patch_dashboard
+        ;;
+      *)
+        echo "Usage: $0 [all|opensearch|dashboard]"
+        exit 2
+        ;;
+    esac

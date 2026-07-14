@@ -1,0 +1,8 @@
+---
+- name: Pull Vault images
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: pull_images
+  vars:
+    dev_infra_deployment_image_file_name: dev-infra-vault.txt
+    dev_infra_deployment_image_refs: "{{ dev_infra_deployment_vault_images }}"

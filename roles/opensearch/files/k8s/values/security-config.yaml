@@ -1,0 +1,182 @@
+---
+securityConfig:
+  enabled: true
+  path: "/usr/share/opensearch/config/opensearch-security"
+  config:
+    securityConfigSecret: opensearch-security-config
+    dataComplete: true
+    data: {}
+
+security:
+  secrets:
+    adminCredentialsName: opensearch-admin-credentials
+    configName: opensearch-security-config
+    internalUsersName: opensearch-internal-user-passwords
+    nodeConfigName: opensearch-node-config
+  users:
+    admin:
+      username: admin
+    kibanaserver:
+      username: kibanaserver
+    metricConsumer:
+      username: metric_consumer
+    fluentbit:
+      username: fluentbit
+
+extraObjects:
+  - |
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: {{ .Values.security.secrets.adminCredentialsName }}
+      namespace: {{ .Release.Namespace }}
+      labels:
+        {{- include "opensearch.labels" . | nindent 4 }}
+    type: Opaque
+    stringData:
+      username: {{ .Values.security.users.admin.username | quote }}
+      password: {{ required "security.users.admin.password is required" .Values.security.users.admin.password | quote }}
+  - |
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: {{ .Values.security.secrets.internalUsersName }}
+      namespace: {{ .Release.Namespace }}
+      labels:
+        {{- include "opensearch.labels" . | nindent 4 }}
+    type: Opaque
+    stringData:
+      admin-password: {{ required "security.users.admin.password is required" .Values.security.users.admin.password | quote }}
+      kibanaserver-password: {{ required "security.users.kibanaserver.password is required" .Values.security.users.kibanaserver.password | quote }}
+      metric-consumer-password: {{ required "security.users.metricConsumer.password is required" .Values.security.users.metricConsumer.password | quote }}
+      fluentbit-password: {{ required "security.users.fluentbit.password is required" .Values.security.users.fluentbit.password | quote }}
+  - |
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: {{ .Values.security.secrets.configName }}
+      namespace: {{ .Release.Namespace }}
+      labels:
+        {{- include "opensearch.labels" . | nindent 4 }}
+    type: Opaque
+    stringData:
+      config.yml: |
+        _meta:
+          type: config
+          config_version: 2
+
+        config:
+          dynamic:
+            http:
+              anonymous_auth_enabled: false
+              xff:
+                enabled: false
+            authc:
+              basic_internal_auth_domain:
+                description: Authenticate via HTTP Basic against internal users database
+                http_enabled: true
+                transport_enabled: true
+                order: 0
+                http_authenticator:
+                  type: basic
+                  challenge: true
+                authentication_backend:
+                  type: intern
+      action_groups.yml: |
+        _meta:
+          type: actiongroups
+          config_version: 2
+      tenants.yml: |
+        _meta:
+          type: tenants
+          config_version: 2
+      nodes_dn.yml: |
+        _meta:
+          type: nodesdn
+          config_version: 2
+      internal_users.yml: |
+        _meta:
+          type: internalusers
+          config_version: 2
+
+        admin:
+          hash: {{ required "security.users.admin.hash is required" .Values.security.users.admin.hash | quote }}
+          reserved: true
+          backend_roles: []
+          description: Admin user
+
+        kibanaserver:
+          hash: {{ required "security.users.kibanaserver.hash is required" .Values.security.users.kibanaserver.hash | quote }}
+          reserved: true
+          backend_roles: []
+          description: OpenSearch Dashboards server user
+
+        metric_consumer:
+          hash: {{ required "security.users.metricConsumer.hash is required" .Values.security.users.metricConsumer.hash | quote }}
+          reserved: true
+          backend_roles: []
+          description: Business app data user
+
+        fluentbit:
+          hash: {{ required "security.users.fluentbit.hash is required" .Values.security.users.fluentbit.hash | quote }}
+          reserved: true
+          backend_roles: []
+          description: FluentBit log writer user
+      roles.yml: |
+        _meta:
+          type: roles
+          config_version: 2
+
+        metric_consumer:
+          cluster_permissions:
+            - cluster_monitor
+            - cluster_composite_ops
+            - cluster_manage_pipelines
+            - cluster_manage_index_templates
+          index_permissions:
+            - index_patterns:
+                - gcloud-s3gw-metrics-*
+                - metrics-apisix-alias
+                - metrics-bucket-*
+              allowed_actions:
+                - read
+            - index_patterns:
+                - s3-*
+              allowed_actions:
+                - data_access
+                - manage
+
+        fluentbit:
+          cluster_permissions:
+            - cluster_composite_ops
+          index_permissions:
+            - index_patterns:
+                - "*"
+              allowed_actions:
+                - create_index
+                - index
+      roles_mapping.yml: |
+        _meta:
+          type: rolesmapping
+          config_version: 2
+
+        all_access:
+          reserved: false
+          backend_roles:
+            - admin
+          users:
+            - admin
+          description: Maps the internal admin user to all_access
+
+        kibana_server:
+          reserved: true
+          users:
+            - kibanaserver
+
+        metric_consumer:
+          users:
+            - metric_consumer
+
+        fluentbit:
+          users:
+            - fluentbit

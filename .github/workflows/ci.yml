@@ -1,0 +1,43 @@
+---
+name: collection-ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Ansible
+        run: python -m pip install ansible-core
+      - name: Build Collection
+        run: ansible-galaxy collection build --force --output-path .build
+      - name: Install Collection
+        run: ansible-galaxy collection install --force -p .ansible/collections .build/dev_infra-deployment-*.tar.gz
+      - name: Validate lifecycle entrypoints
+        run: |
+          set -eu
+          test ! -e playbooks/install.yml
+          for playbook in init bootstrap configure kickstart pull restart uninstall; do
+            test -f "playbooks/${playbook}.yml"
+          done
+          for role in vault etcd opensearch opensearch_dashboard; do
+            for lifecycle in configure pull restart uninstall; do
+              test -f "roles/${role}/tasks/${lifecycle}.yml"
+            done
+          done
+      - name: Syntax check public playbooks
+        env:
+          ANSIBLE_COLLECTIONS_PATH: .ansible/collections
+        run: |
+          set -eu
+          for playbook in init bootstrap configure kickstart pull restart uninstall; do
+            ansible-playbook -i tests/inventory/hosts.yml --syntax-check "dev_infra.deployment.${playbook}"
+          done

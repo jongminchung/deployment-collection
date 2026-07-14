@@ -1,0 +1,36 @@
+---
+- name: Stage OpenSearch artifacts
+  ansible.builtin.import_tasks: stage.yml
+
+- name: Wait for OpenSearch rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_rollout_resource: "sts/{{ dev_infra_deployment_opensearch_statefulset_name }}"
+    dev_infra_deployment_rollout_timeout: "{{ dev_infra_deployment_opensearch_rollout_timeout }}"
+    dev_infra_deployment_rollout_timeout_seconds:
+      "{{ dev_infra_deployment_opensearch_rollout_timeout_seconds }}"
+
+- name: Wait for OpenSearch Pods Ready
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_pods
+  vars:
+    dev_infra_deployment_pod_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_pod_selector: "{{ dev_infra_deployment_opensearch_workload_pod_selector }}"
+    dev_infra_deployment_pod_timeout_seconds: "{{ dev_infra_deployment_opensearch_timeout_seconds }}"
+
+- name: Run OpenSearch index template Job
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: run_job
+  vars:
+    dev_infra_deployment_job_name: "{{ dev_infra_deployment_opensearch_index_template_job_name }}"
+    dev_infra_deployment_job_manifest: "{{ dev_infra_deployment_opensearch_index_template_job_manifest }}"
+    dev_infra_deployment_job_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_job_timeout_seconds: "{{ dev_infra_deployment_opensearch_job_timeout_seconds }}"
+
+- name: Verify OpenSearch after configure
+  ansible.builtin.import_tasks: verify.yml

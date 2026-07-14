@@ -1,0 +1,28 @@
+---
+external_dns_namespace: external-dns
+external_dns_release_name: external-dns
+external_dns_chart_ref: external-dns/external-dns
+external_dns_chart_repo_name: external-dns
+external_dns_chart_repo_url: https://kubernetes-sigs.github.io/external-dns/
+external_dns_helm_install_script_url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+external_dns_provider_name: cloudflare
+external_dns_cloudflare_api_token: ""
+external_dns_cloudflare_zone_id: ""
+external_dns_cloudflare_api_validate_certs: true
+external_dns_cloudflare_secret_name: external-dns-cloudflare
+external_dns_cloudflare_proxied: false
+external_dns_cloudflare_dns_records_per_page: 5000
+external_dns_cloudflare_record_comment: managed by dev-infra external-dns
+
+external_dns_domain_filters:
+  - apps.jamie.kr
+external_dns_txt_owner_id: k8s-mgr
+external_dns_sources:
+  - gateway-httproute
+external_dns_gateway_name: "{{ apisix_gateway_name | default('public') }}"
+external_dns_gateway_namespace: "{{ apisix_namespace | default('apisix') }}"
+external_dns_target: "{{ ansible_host }}"
+
+external_dns_extra_args: {}
+
+external_dns_helm_values: {}

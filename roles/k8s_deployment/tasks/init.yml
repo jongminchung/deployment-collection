@@ -1,0 +1,30 @@
+---
+- name: Validate deployment inventory groups
+  ansible.builtin.assert:
+    that:
+      - groups.get('k8s_workload_mgr', []) | length > 0
+      - groups.get('ai_agent', []) | length == 0
+    fail_msg: Use the deployment inventory and keep ai-agent in inventory_ai_agent.
+
+- name: Validate inline deployment secrets
+  ansible.builtin.assert:
+    that:
+      - hostvars[deployment_inventory_host].deployment_cloudflare_api_token | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].deployment_cloudflare_zone_id | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].apisix_admin_key | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].apisix_viewer_key | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].vault_initial_root_token | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].vault_unseal_key | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_admin_password | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_admin_password_hash | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_kibanaserver_password | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_kibanaserver_password_hash | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_metric_consumer_password | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_metric_consumer_password_hash | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_fluentbit_password | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_fluentbit_password_hash | default('') | string | length > 0
+      - hostvars[deployment_inventory_host].opensearch_dashboard_password | default('') | string | length > 0
+    fail_msg: Add the required encrypted !vault values to deployment group_vars and host_vars.
+  no_log: true
+  vars:
+    deployment_inventory_host: "{{ groups['k8s_workload_mgr'] | first }}"

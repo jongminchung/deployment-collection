@@ -1,0 +1,53 @@
+---
+- name: Stage etcd artifacts
+  ansible.builtin.import_tasks: stage.yml
+
+- name: Uninstall etcd Helm release
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_uninstall
+  vars:
+    dev_infra_deployment_helm_release_name: "{{ dev_infra_deployment_etcd_release_name }}"
+    dev_infra_deployment_helm_namespace: "{{ dev_infra_deployment_namespace }}"
+
+- name: Delete etcd Pods before persistent data deletion
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: delete_labelled
+  vars:
+    dev_infra_deployment_delete_kind: Pod
+    dev_infra_deployment_delete_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_delete_label_selectors:
+      - "{{ dev_infra_deployment_etcd_pod_selector }}"
+    dev_infra_deployment_delete_options:
+      gracePeriodSeconds: 0
+    dev_infra_deployment_delete_wait_sleep: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
+
+- name: Delete etcd Certificates
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: delete_manifest
+  vars:
+    dev_infra_deployment_delete_path: "{{ dev_infra_deployment_etcd_certificate_manifest }}"
+
+- name: Delete stale etcd client TLS resources
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: "{{ item.api_version }}"
+    kind: "{{ item.kind }}"
+    namespace: "{{ dev_infra_deployment_namespace }}"
+    name: "{{ item.name }}"
+    state: absent
+  loop: "{{ dev_infra_deployment_etcd_stale_tls_resources }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+
+- name: Delete etcd PVCs
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: delete_labelled
+  vars:
+    dev_infra_deployment_delete_kind: PersistentVolumeClaim
+    dev_infra_deployment_delete_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_delete_label_selectors:
+      - "app.kubernetes.io/instance={{ dev_infra_deployment_etcd_release_name }}"

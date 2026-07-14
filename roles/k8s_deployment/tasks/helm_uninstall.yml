@@ -1,0 +1,11 @@
+- name: Uninstall Helm release {{ dev_infra_deployment_helm_release_name }}
+  kubernetes.core.helm:
+    binary_path: "{{ dev_infra_deployment_helm_bin }}"
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    release_name: "{{ dev_infra_deployment_helm_release_name }}"
+    release_namespace: "{{ dev_infra_deployment_helm_namespace }}"
+    release_state: absent
+    wait: "{{ dev_infra_deployment_helm_wait | default(true) | bool }}"
+    timeout: "{{ dev_infra_deployment_helm_timeout | default(dev_infra_deployment_wait_timeout) }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

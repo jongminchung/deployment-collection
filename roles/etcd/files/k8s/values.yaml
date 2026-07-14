@@ -1,0 +1,103 @@
+---
+fullnameOverride: gabiacloud-s3-etcd
+clusterDomain: cluster.local
+initialClusterToken: gabiacloud-s3-etcd
+
+commonAnnotations:
+  secret.reloader.stakater.com/reload: "s3-etcd-peer-tls"
+  configmap.reloader.stakater.com/reload: "root-tls-ca-trust-bundle"
+
+image:
+  registry: docker.io
+  repository: bitnamilegacy/etcd
+  tag: 3.6.4-debian-12-r3
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+containerPorts:
+  client: 2379
+  peer: 2380
+
+auth:
+  rbac:
+    create: false
+    allowNoneAuthentication: true
+  token:
+    enabled: false
+  client:
+    secureTransport: false
+    useAutoTLS: false
+    enableAuthentication: false
+  peer:
+    secureTransport: true
+    useAutoTLS: false
+    existingSecret: s3-etcd-peer-tls
+    enableAuthentication: true
+    certFilename: tls.crt
+    certKeyFilename: tls.key
+    caFilename: ../root-ca/ca.crt
+
+service:
+  enabled: true
+  type: ClusterIP
+  ports:
+    client: 2379
+    peer: 2380
+  annotations: {}
+
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 8Gi
+
+volumePermissions:
+  enabled: false
+
+extraVolumes:
+  - name: root-tls-ca-trust-bundle
+    configMap:
+      name: root-tls-ca-trust-bundle
+      items:
+        - key: ca.crt
+          path: ca.crt
+
+extraVolumeMounts:
+  - name: root-tls-ca-trust-bundle
+    mountPath: /opt/bitnami/etcd/certs/root-ca
+    readOnly: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+pdb:
+  create: true
+  minAvailable: ""
+  maxUnavailable: 1
+
+podAntiAffinityPreset: soft
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: etcd
+        app.kubernetes.io/instance: gabiacloud-s3-etcd
+        app.kubernetes.io/component: etcd
+
+networkPolicy:
+  enabled: true
+  allowExternal: true
+  allowExternalEgress: true
+
+disasterRecovery:
+  enabled: false
+
+preUpgradeJob:
+  enabled: false

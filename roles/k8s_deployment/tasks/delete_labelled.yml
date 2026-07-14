@@ -1,0 +1,16 @@
+- name: Delete Kubernetes {{ dev_infra_deployment_delete_kind }} objects matching labels
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    state: absent
+    api_version: "{{ dev_infra_deployment_delete_api_version | default('v1') }}"
+    kind: "{{ dev_infra_deployment_delete_kind }}"
+    namespace: "{{ dev_infra_deployment_delete_namespace | default(omit) }}"
+    label_selectors: "{{ dev_infra_deployment_delete_label_selectors }}"
+    delete_all: true
+    delete_options: "{{ dev_infra_deployment_delete_options | default(omit) }}"
+    wait: "{{ dev_infra_deployment_delete_wait | default(true) | bool }}"
+    wait_sleep: "{{ dev_infra_deployment_delete_wait_sleep | default(omit) }}"
+    wait_timeout:
+      "{{ dev_infra_deployment_delete_wait_timeout | default(dev_infra_deployment_wait_timeout_seconds) }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

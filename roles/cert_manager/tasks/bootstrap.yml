@@ -1,0 +1,73 @@
+---
+- name: Validate cert-manager settings
+  ansible.builtin.assert:
+    that:
+      - cert_manager_namespace | length > 0
+      - cert_manager_release_name | length > 0
+      - cert_manager_helmchart_namespace | length > 0
+      - cert_manager_chart_ref | length > 0
+      - cert_manager_chart_repo_url | length > 0
+      - cert_manager_chart_version | string | length > 0
+      - cert_manager_helmchart_failure_policy in ['abort', 'reinstall']
+      - cert_manager_helmchart_manifest_path | length > 0
+      - cert_manager_helm_values is mapping
+      - cert_manager_wait_timeout | length > 0
+    fail_msg: cert-manager role settings are invalid.
+  tags:
+    - always
+    - validate
+
+- name: Render cert-manager HelmChart manifest
+  ansible.builtin.copy:
+    content: |
+      ---
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChart
+      metadata:
+        name: {{ cert_manager_release_name }}
+        namespace: {{ cert_manager_helmchart_namespace }}
+      spec:
+        chart: {{ cert_manager_chart_ref }}
+        repo: {{ cert_manager_chart_repo_url }}
+        version: {{ cert_manager_chart_version }}
+        targetNamespace: {{ cert_manager_namespace }}
+        createNamespace: true
+        failurePolicy: {{ cert_manager_helmchart_failure_policy }}
+        valuesContent: |-
+      {{ cert_manager_helm_values | to_nice_yaml(indent=2) | indent(4, true) }}
+    dest: "{{ cert_manager_helmchart_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply cert-manager HelmChart
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - --kubeconfig
+      - "{{ k8s_kubeconfig | default('/etc/rancher/rke2/rke2.yaml') }}"
+      - apply
+      - -f
+      - "{{ cert_manager_helmchart_manifest_path }}"
+  register: cert_manager_helmchart_apply
+  changed_when: >-
+    ' created' in (' ' ~ cert_manager_helmchart_apply.stdout)
+    or ' configured' in (' ' ~ cert_manager_helmchart_apply.stdout)
+  when: not ansible_check_mode
+
+- name: Wait for cert-manager rollout
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - rollout
+      - status
+      - deployment/{{ item }}
+      - --namespace
+      - "{{ cert_manager_namespace }}"
+      - --timeout={{ cert_manager_wait_timeout }}
+  loop:
+    - cert-manager
+    - cert-manager-cainjector
+    - cert-manager-webhook
+  changed_when: false
+  when: not ansible_check_mode

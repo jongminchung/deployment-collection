@@ -1,0 +1,19 @@
+---
+- name: Render internal PKI issuer manifests for deletion
+  ansible.builtin.template:
+    src: issuer.yaml.j2
+    dest: "{{ internal_pki_issuer_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  check_mode: false
+
+- name: Delete internal PKI issuer resources
+  kubernetes.core.k8s:
+    kubeconfig: "{{ internal_pki_issuer_kubeconfig }}"
+    state: absent
+    src: "{{ internal_pki_issuer_manifest_path }}"
+    wait: true
+    wait_timeout: "{{ internal_pki_issuer_wait_timeout_seconds }}"
+  vars:
+    ansible_python_interpreter: "{{ internal_pki_issuer_python_interpreter }}"

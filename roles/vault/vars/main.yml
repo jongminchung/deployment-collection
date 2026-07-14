@@ -1,0 +1,6 @@
+---
+dev_infra_deployment_vault_artifacts_root: "{{ dev_infra_deployment_artifacts_root }}/vault"
+dev_infra_deployment_vault_values_files:
+  - "{{ dev_infra_deployment_vault_artifacts_root }}/values.yaml"
+dev_infra_deployment_vault_rbac_manifest:
+  "{{ dev_infra_deployment_vault_artifacts_root }}/manifests/2-rbac.yaml"

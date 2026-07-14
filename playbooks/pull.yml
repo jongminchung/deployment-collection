@@ -1,0 +1,29 @@
+---
+- name: Pull Kubernetes workload images into RKE2
+  hosts: k8s_workload_nodes
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Pull Vault images
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.vault
+        tasks_from: pull
+      tags: [vault]
+
+    - name: Pull etcd images
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.etcd
+        tasks_from: pull
+      tags: [etcd]
+
+    - name: Pull OpenSearch images
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.opensearch
+        tasks_from: pull
+      tags: [opensearch]
+
+    - name: Pull Dashboard images
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.opensearch_dashboard
+        tasks_from: pull
+      tags: [opensearch_dashboard, dashboard]

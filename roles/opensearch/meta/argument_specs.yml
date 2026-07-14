@@ -1,0 +1,23 @@
+---
+argument_specs:
+  configure:
+    short_description: Configure or update OpenSearch and apply OpenSearch-owned artifacts.
+    options: {}
+  kickstart:
+    short_description: Run OpenSearch post-deployment index-template Jobs.
+    options: {}
+  pull:
+    short_description: Pull OpenSearch images into RKE2 containerd.
+    options: {}
+  restart:
+    short_description: Restart OpenSearch workloads explicitly.
+    options: {}
+  uninstall:
+    short_description: Remove OpenSearch release, local manifests, Jobs, certificates, and PVCs.
+    options: {}
+  verify:
+    short_description: Verify OpenSearch workload readiness.
+    options: {}
+  stage:
+    short_description: Stage OpenSearch-owned static artifacts on the target host.
+    options: {}

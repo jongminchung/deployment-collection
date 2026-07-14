@@ -1,0 +1,23 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ acme_dns01_issuer_name }}
+spec:
+  acme:
+    server: {{ acme_dns01_issuer_server }}
+{% if acme_dns01_issuer_email | string | length > 0 %}
+    email: {{ acme_dns01_issuer_email }}
+{% endif %}
+    privateKeySecretRef:
+      name: {{ acme_dns01_issuer_account_key_secret_name }}
+    solvers:
+      - selector:
+          dnsZones:
+{% for dns_zone in acme_dns01_issuer_dns_zones %}
+            - {{ dns_zone }}
+{% endfor %}
+        dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: {{ acme_dns01_issuer_secret_name }}
+              key: {{ acme_dns01_issuer_secret_key }}

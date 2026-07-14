@@ -1,0 +1,50 @@
+---
+- name: Converge Kubernetes platform foundation
+  ansible.builtin.import_playbook: bootstrap.yml
+
+- name: Configure Kubernetes workloads
+  hosts: k8s_workload_mgr
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Prepare Kubernetes deployment prerequisites
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.k8s_deployment
+        tasks_from: prerequisites
+      tags: [always]
+  tasks:
+    - name: Configure Vault
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.vault
+        tasks_from: configure
+      tags: [vault]
+
+    - name: Configure internal PKI issuer
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.internal_pki_issuer
+        tasks_from: configure
+      tags: [internal_pki_issuer, pki, tls]
+
+    - name: Configure workload bootstrap resources
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.workload_bootstrap
+        tasks_from: configure
+      tags: [workload_bootstrap, pki]
+
+    - name: Configure etcd
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.etcd
+        tasks_from: configure
+      tags: [etcd]
+
+    - name: Configure OpenSearch
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.opensearch
+        tasks_from: configure
+      tags: [opensearch]
+
+    - name: Configure OpenSearch Dashboard
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.opensearch_dashboard
+        tasks_from: configure
+      tags: [opensearch_dashboard, dashboard]

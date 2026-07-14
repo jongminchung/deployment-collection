@@ -1,0 +1,134 @@
+---
+- name: Resolve ACME DNS-01 issuer role request state
+  ansible.builtin.set_fact:
+    acme_dns01_issuer_role_requested:
+      "{{ ((ansible_run_tags | default(['all'])) | intersect(['all', 'acme_dns01_issuer',
+      'cert_manager', 'external_tls_certificate', 'apps_external_tls', 's3_external_tls', 'tls']) |
+      length) > 0 }}"
+  tags:
+    - always
+
+- name: Validate ACME DNS-01 issuer settings
+  ansible.builtin.assert:
+    that:
+      - acme_dns01_issuer_name | length > 0
+      - acme_dns01_issuer_namespace | length > 0
+      - acme_dns01_issuer_secret_name | length > 0
+      - acme_dns01_issuer_secret_key | length > 0
+      - acme_dns01_issuer_cloudflare_api_token | length > 0
+      - acme_dns01_issuer_cloudflare_zone_id | length > 0
+      - acme_dns01_issuer_server | length > 0
+      - acme_dns01_issuer_account_key_secret_name | length > 0
+      - acme_dns01_issuer_dns_zones is iterable
+      - acme_dns01_issuer_dns_zones is not string
+      - acme_dns01_issuer_dns_zones | length > 0
+      - acme_dns01_issuer_wait_timeout | length > 0
+    fail_msg: ACME DNS-01 issuer settings are invalid.
+  no_log: true
+  when: acme_dns01_issuer_role_requested | bool
+  tags:
+    - always
+    - validate
+
+- name: Check ACME DNS-01 Cloudflare DNS record API access
+  ansible.builtin.uri:
+    url:
+      "https://api.cloudflare.com/client/v4/zones/{{ acme_dns01_issuer_cloudflare_zone_id
+      }}/dns_records?per_page=1"
+    validate_certs: "{{ acme_dns01_issuer_cloudflare_api_validate_certs | bool }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ acme_dns01_issuer_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+    status_code: 200
+  become: false
+  register: acme_dns01_issuer_cloudflare_dns_records_access
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - acme_dns01_issuer_role_requested | bool
+    - not ansible_check_mode
+
+- name: Validate ACME DNS-01 Cloudflare DNS record API access
+  ansible.builtin.assert:
+    that:
+      - acme_dns01_issuer_cloudflare_dns_records_access.status == 200
+      - acme_dns01_issuer_cloudflare_dns_records_access.json.success | default(false) | bool
+    fail_msg: >-
+      CLOUDFLARE_API_TOKEN must be a Cloudflare API token that can read and edit DNS records for
+      zone {{ acme_dns01_issuer_cloudflare_zone_id }}. cert-manager DNS-01 requires Zone
+      DNS Edit and Zone Read permissions.
+  when:
+    - acme_dns01_issuer_role_requested | bool
+    - not ansible_check_mode
+
+- name: Render ACME DNS-01 ClusterIssuer manifest
+  ansible.builtin.template:
+    src: clusterissuer.yaml.j2
+    dest: /tmp/acme-dns01-clusterissuer.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: acme_dns01_issuer_role_requested | bool
+
+- name: Ensure ACME DNS-01 secret namespace exists
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - create
+      - namespace
+      - "{{ acme_dns01_issuer_namespace }}"
+  register: acme_dns01_issuer_namespace_create
+  changed_when: acme_dns01_issuer_namespace_create.rc == 0
+  failed_when:
+    - acme_dns01_issuer_namespace_create.rc != 0
+    - "'AlreadyExists' not in acme_dns01_issuer_namespace_create.stderr"
+  when:
+    - acme_dns01_issuer_role_requested | bool
+    - not ansible_check_mode
+
+- name: Configure ACME DNS-01 Cloudflare token secret
+  ansible.builtin.shell: >-
+    set -o pipefail && {{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }} create
+    secret generic {{ acme_dns01_issuer_secret_name | quote }} --namespace {{
+    acme_dns01_issuer_namespace | quote }} --from-literal={{ acme_dns01_issuer_secret_key }}={{
+    acme_dns01_issuer_cloudflare_api_token | quote }} --dry-run=client -o yaml | {{
+    k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }} apply -f -
+  args:
+    executable: /bin/bash
+  register: acme_dns01_issuer_cloudflare_secret_apply
+  changed_when:
+    "'created' in acme_dns01_issuer_cloudflare_secret_apply.stdout or 'configured' in
+    acme_dns01_issuer_cloudflare_secret_apply.stdout"
+  no_log: true
+  when:
+    - acme_dns01_issuer_role_requested | bool
+    - not ansible_check_mode
+
+- name: Apply ACME DNS-01 ClusterIssuer
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - apply
+      - -f
+      - /tmp/acme-dns01-clusterissuer.yaml
+  register: acme_dns01_issuer_apply
+  changed_when: "'unchanged' not in acme_dns01_issuer_apply.stdout"
+  when:
+    - acme_dns01_issuer_role_requested | bool
+    - not ansible_check_mode
+
+- name: Wait for ACME DNS-01 ClusterIssuer readiness
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - wait
+      - --for=condition=Ready
+      - clusterissuer/{{ acme_dns01_issuer_name }}
+      - --timeout={{ acme_dns01_issuer_wait_timeout }}
+  changed_when: false
+  when:
+    - acme_dns01_issuer_role_requested | bool
+    - not ansible_check_mode

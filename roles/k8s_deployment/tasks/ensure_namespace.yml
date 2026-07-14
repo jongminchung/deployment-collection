@@ -1,0 +1,12 @@
+---
+- name: Ensure Kubernetes namespace {{ dev_infra_deployment_target_namespace }} exists
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ dev_infra_deployment_target_namespace }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

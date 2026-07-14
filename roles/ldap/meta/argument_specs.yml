@@ -1,0 +1,5 @@
+---
+argument_specs:
+  uninstall:
+    short_description: Remove LDAP resources and persistent volume claims.
+    options: {}

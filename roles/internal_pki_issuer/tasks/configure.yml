@@ -1,0 +1,87 @@
+---
+
+- name: Validate internal PKI issuer settings
+  ansible.builtin.assert:
+    that:
+      - internal_pki_issuer_name | length > 0
+      - internal_pki_issuer_vault_namespace | length > 0
+      - internal_pki_issuer_vault_pod_name | length > 0
+      - internal_pki_issuer_vault_addr | length > 0
+      - internal_pki_issuer_vault_service_addr | length > 0
+      - internal_pki_issuer_vault_pki_path | length > 0
+      - internal_pki_issuer_vault_root_common_name | length > 0
+      - internal_pki_issuer_cert_manager_namespace | length > 0
+      - internal_pki_issuer_service_account_name | length > 0
+      - internal_pki_issuer_manifest_path | length > 0
+      - internal_pki_issuer_wait_timeout | length > 0
+      - internal_pki_issuer_vault_initial_root_token | string | length > 0
+    fail_msg: >-
+      Internal PKI issuer settings are invalid. Set vault_initial_root_token as an encrypted inline
+      inventory value.
+  no_log: true
+
+- name: Wait for Vault pod readiness before internal PKI configure
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ internal_pki_issuer_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ internal_pki_issuer_vault_namespace }}"
+    name: "{{ internal_pki_issuer_vault_pod_name }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_sleep: "{{ dev_infra_deployment_pod_wait_sleep_seconds | default(5) }}"
+    wait_timeout: "{{ internal_pki_issuer_wait_timeout_seconds }}"
+  vars:
+    ansible_python_interpreter: "{{ internal_pki_issuer_python_interpreter }}"
+  changed_when: false
+
+- name: Render internal PKI issuer manifests
+  ansible.builtin.template:
+    src: issuer.yaml.j2
+    dest: "{{ internal_pki_issuer_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Apply internal PKI issuer RBAC and ClusterIssuer
+  kubernetes.core.k8s:
+    kubeconfig: "{{ internal_pki_issuer_kubeconfig }}"
+    state: present
+    src: "{{ internal_pki_issuer_manifest_path }}"
+    apply: true
+  vars:
+    ansible_python_interpreter: "{{ internal_pki_issuer_python_interpreter }}"
+
+- name: Configure Vault internal PKI backend
+  kubernetes.core.k8s_exec:
+    kubeconfig: "{{ internal_pki_issuer_kubeconfig }}"
+    namespace: "{{ internal_pki_issuer_vault_namespace }}"
+    pod: "{{ internal_pki_issuer_vault_pod_name }}"
+    command: "sh -c {{ internal_pki_issuer_configure_script | quote }}"
+  vars:
+    ansible_python_interpreter: "{{ internal_pki_issuer_python_interpreter }}"
+    internal_pki_issuer_configure_script:
+      "{{ lookup('ansible.builtin.template', 'configure-pki.sh.j2') }}"
+  no_log: true
+  changed_when: true
+  when: not ansible_check_mode
+
+- name: Wait for internal PKI ClusterIssuer readiness
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ internal_pki_issuer_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: ClusterIssuer
+    name: "{{ internal_pki_issuer_name }}"
+  register: internal_pki_issuer_wait
+  until: >
+    (internal_pki_issuer_wait.resources | length > 0) and
+    (((internal_pki_issuer_wait.resources[0].status.conditions | default([])) | selectattr('type',
+    'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length) > 0)
+  retries: "{{ (internal_pki_issuer_wait_timeout_seconds | int / 5) | round(0, 'ceil') | int }}"
+  delay: 5
+  vars:
+    ansible_python_interpreter: "{{ internal_pki_issuer_python_interpreter }}"
+  changed_when: false
+  when: not ansible_check_mode

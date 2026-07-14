@@ -1,0 +1,18 @@
+---
+dev_infra_deployment_etcd_release_name: gabiacloud-s3-etcd
+dev_infra_deployment_etcd_chart_ref: oci://registry-1.docker.io/bitnamicharts/etcd
+dev_infra_deployment_etcd_chart_version: 12.0.18
+dev_infra_deployment_etcd_peer_certificate_name: s3-etcd-peer-tls
+dev_infra_deployment_etcd_stale_tls_resources:
+  - api_version: cert-manager.io/v1
+    kind: Certificate
+    name: s3-etcd-server-tls
+  - api_version: v1
+    kind: Secret
+    name: s3-etcd-server-tls
+dev_infra_deployment_etcd_statefulset_name: gabiacloud-s3-etcd
+dev_infra_deployment_etcd_pod_selector: app.kubernetes.io/instance=gabiacloud-s3-etcd
+dev_infra_deployment_etcd_timeout: 5m
+dev_infra_deployment_etcd_timeout_seconds: 300
+dev_infra_deployment_etcd_images:
+  - docker.io/bitnamilegacy/etcd:3.6.4-debian-12-r3

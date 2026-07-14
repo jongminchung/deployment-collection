@@ -1,0 +1,51 @@
+---
+- name: Stage Vault artifacts
+  ansible.builtin.import_tasks: stage.yml
+
+- name: Ensure Vault namespace exists
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: ensure_namespace
+  vars:
+    dev_infra_deployment_target_namespace: "{{ dev_infra_deployment_vault_namespace }}"
+
+- name: Read Vault Helm values
+  ansible.builtin.slurp:
+    src: "{{ dev_infra_deployment_vault_values_files[0] }}"
+  register: dev_infra_deployment_vault_values_slurp
+  check_mode: false
+
+- name: Install or upgrade Vault HelmChart
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChart
+      metadata:
+        name: "{{ dev_infra_deployment_vault_release_name }}"
+        namespace: "{{ dev_infra_deployment_vault_helmchart_namespace }}"
+      spec:
+        chart: "{{ dev_infra_deployment_vault_chart_ref }}"
+        repo: "{{ dev_infra_deployment_vault_repo_url }}"
+        version: "{{ dev_infra_deployment_vault_chart_version }}"
+        targetNamespace: "{{ dev_infra_deployment_vault_namespace }}"
+        createNamespace: true
+        failurePolicy: "{{ dev_infra_deployment_vault_helmchart_failure_policy }}"
+        timeout: "{{ dev_infra_deployment_vault_timeout }}"
+        valuesContent: "{{ dev_infra_deployment_vault_values_slurp.content | b64decode }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  when: not ansible_check_mode
+
+- name: Converge Vault seal state
+  ansible.builtin.import_tasks: kickstart.yml
+  when: not ansible_check_mode
+
+- name: Apply Vault auth RBAC
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: apply_manifest
+  vars:
+    dev_infra_deployment_apply_path: "{{ dev_infra_deployment_vault_rbac_manifest }}"
+    dev_infra_deployment_apply_server_side: false

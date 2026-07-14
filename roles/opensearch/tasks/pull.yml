@@ -1,0 +1,8 @@
+---
+- name: Pull OpenSearch images
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: pull_images
+  vars:
+    dev_infra_deployment_image_file_name: dev-infra-opensearch.txt
+    dev_infra_deployment_image_refs: "{{ dev_infra_deployment_opensearch_images }}"

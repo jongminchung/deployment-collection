@@ -1,0 +1,12 @@
+---
+- name: Restart etcd StatefulSet
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_restart
+  vars:
+    dev_infra_deployment_restart_kind: StatefulSet
+    dev_infra_deployment_restart_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_restart_name: "{{ dev_infra_deployment_etcd_statefulset_name }}"
+
+- name: Verify etcd after restart
+  ansible.builtin.import_tasks: verify.yml

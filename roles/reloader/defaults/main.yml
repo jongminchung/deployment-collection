@@ -1,0 +1,16 @@
+---
+dev_infra_deployment_reloader_namespace: reloader
+dev_infra_deployment_reloader_release_name: reloader
+dev_infra_deployment_reloader_repo_name: stakater
+dev_infra_deployment_reloader_repo_url: https://stakater.github.io/stakater-charts
+dev_infra_deployment_reloader_chart_ref: stakater/reloader
+dev_infra_deployment_reloader_chart_version: 2.2.12
+dev_infra_deployment_reloader_pod_selector: app.kubernetes.io/instance=reloader
+dev_infra_deployment_reloader_set_values:
+  - value: fullnameOverride=reloader
+  - value: reloader.reloadStrategy=annotations
+  - value: reloader.ignoreJobs=true
+  - value: reloader.ignoreCronJobs=true
+dev_infra_deployment_reloader_deployment_name: reloader
+dev_infra_deployment_reloader_timeout: 5m
+dev_infra_deployment_reloader_timeout_seconds: 300

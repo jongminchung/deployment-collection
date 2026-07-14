@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ external_tls_certificate_name }}
+  namespace: {{ external_tls_certificate_namespace }}
+spec:
+  secretName: {{ external_tls_certificate_secret_name }}
+  issuerRef:
+    name: {{ external_tls_certificate_issuer_name }}
+    kind: {{ external_tls_certificate_issuer_kind }}
+    group: cert-manager.io
+  dnsNames:
+{% for dns_name in external_tls_certificate_dns_names %}
+    - {{ dns_name | quote }}
+{% endfor %}
+  privateKey:
+    rotationPolicy: Always
+    algorithm: RSA
+    size: 2048

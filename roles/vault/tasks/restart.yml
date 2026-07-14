@@ -1,0 +1,22 @@
+---
+- name: Restart Vault Pod
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    state: absent
+    api_version: v1
+    kind: Pod
+    namespace: "{{ dev_infra_deployment_vault_namespace }}"
+    name: "{{ dev_infra_deployment_vault_pod_name }}"
+    wait: true
+    wait_timeout: "{{ dev_infra_deployment_vault_timeout_seconds }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  when: not ansible_check_mode
+
+- name: Bootstrap Vault after restart
+  ansible.builtin.import_tasks: bootstrap.yml
+  when: not ansible_check_mode
+
+- name: Verify Vault after restart
+  ansible.builtin.import_tasks: verify.yml
+  when: not ansible_check_mode

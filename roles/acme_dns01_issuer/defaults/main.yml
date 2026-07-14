@@ -1,0 +1,14 @@
+---
+acme_dns01_issuer_name: letsencrypt-cloudflare-dns01
+acme_dns01_issuer_namespace: "{{ cert_manager_namespace | default('cert-manager') }}"
+acme_dns01_issuer_secret_name: cloudflare-dns01-token
+acme_dns01_issuer_secret_key: api-token
+acme_dns01_issuer_cloudflare_api_token: ""
+acme_dns01_issuer_cloudflare_zone_id: ""
+acme_dns01_issuer_cloudflare_api_validate_certs: true
+acme_dns01_issuer_email: ""
+acme_dns01_issuer_server: https://acme-v02.api.letsencrypt.org/directory
+acme_dns01_issuer_account_key_secret_name: letsencrypt-cloudflare-dns01-account-key
+acme_dns01_issuer_dns_zones:
+  - jamie.kr
+acme_dns01_issuer_wait_timeout: 180s

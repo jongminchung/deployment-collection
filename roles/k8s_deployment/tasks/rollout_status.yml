@@ -1,0 +1,96 @@
+---
+- name: Skip rollout wait for {{ dev_infra_deployment_rollout_resource }} in check mode
+  ansible.builtin.debug:
+    msg:
+      "Skipping rollout wait for {{ dev_infra_deployment_rollout_resource }} because check mode does not
+      roll workloads."
+  when: ansible_check_mode
+
+- name: Resolve rollout resource {{ dev_infra_deployment_rollout_resource }}
+  ansible.builtin.set_fact:
+    dev_infra_deployment_rollout_resource_parts: "{{ dev_infra_deployment_rollout_resource.split('/') }}"
+  when: not ansible_check_mode
+
+- name: Validate rollout resource {{ dev_infra_deployment_rollout_resource }}
+  ansible.builtin.assert:
+    that:
+      - dev_infra_deployment_rollout_resource_parts | length == 2
+      - dev_infra_deployment_rollout_resource_parts[0] | lower in ['deploy', 'deployment', 'sts',
+        'statefulset']
+    fail_msg:
+      "dev_infra_deployment_rollout_resource must be deploy/<name>, deployment/<name>, sts/<name>, or
+      statefulset/<name>."
+  when: not ansible_check_mode
+
+- name: Resolve rollout object identity {{ dev_infra_deployment_rollout_resource }}
+  ansible.builtin.set_fact:
+    dev_infra_deployment_rollout_kind:
+      "{{ dev_infra_deployment_rollout_kind_map[dev_infra_deployment_rollout_resource_parts[0] | lower] }}"
+    dev_infra_deployment_rollout_name: "{{ dev_infra_deployment_rollout_resource_parts[1] }}"
+  vars:
+    dev_infra_deployment_rollout_kind_map:
+      deploy: Deployment
+      deployment: Deployment
+      sts: StatefulSet
+      statefulset: StatefulSet
+  when: not ansible_check_mode
+
+- name: Wait for rollout {{ dev_infra_deployment_rollout_resource }}
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: apps/v1
+    kind: "{{ dev_infra_deployment_rollout_kind }}"
+    namespace: "{{ dev_infra_deployment_rollout_namespace }}"
+    name: "{{ dev_infra_deployment_rollout_name }}"
+  register: dev_infra_deployment_rollout_info
+  until: >-
+    (
+      dev_infra_deployment_rollout_if_exists | default(false) | bool
+      and (dev_infra_deployment_rollout_info.resources | length == 0)
+    ) or (
+      (dev_infra_deployment_rollout_info.resources | length > 0)
+      and
+      (
+        (
+          dev_infra_deployment_rollout_kind == 'Deployment'
+          and
+          (
+            dev_infra_deployment_rollout_object.status.observedGeneration | default(0) | int
+          ) >= (dev_infra_deployment_rollout_object.metadata.generation | default(0) | int)
+          and
+          (
+            dev_infra_deployment_rollout_object.status.updatedReplicas | default(0) | int
+          ) >= (dev_infra_deployment_rollout_object.spec.replicas | default(1) | int)
+          and
+          (
+            dev_infra_deployment_rollout_object.status.availableReplicas | default(0) | int
+          ) >= (dev_infra_deployment_rollout_object.spec.replicas | default(1) | int)
+        )
+        or
+        (
+          dev_infra_deployment_rollout_kind == 'StatefulSet'
+          and
+          (
+            dev_infra_deployment_rollout_object.status.observedGeneration | default(0) | int
+          ) >= (dev_infra_deployment_rollout_object.metadata.generation | default(0) | int)
+          and
+          (
+            dev_infra_deployment_rollout_object.status.updatedReplicas | default(0) | int
+          ) >= (dev_infra_deployment_rollout_object.spec.replicas | default(1) | int)
+          and
+          (
+            dev_infra_deployment_rollout_object.status.readyReplicas | default(0) | int
+          ) >= (dev_infra_deployment_rollout_object.spec.replicas | default(1) | int)
+        )
+      )
+    )
+  retries:
+    "{{ ((dev_infra_deployment_rollout_timeout_seconds | default(dev_infra_deployment_wait_timeout_seconds) |
+    int) / (dev_infra_deployment_rollout_wait_sleep_seconds | int)) | round(0, 'ceil') | int }}"
+  delay: "{{ dev_infra_deployment_rollout_wait_sleep_seconds }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+    dev_infra_deployment_rollout_object:
+      "{{ (dev_infra_deployment_rollout_info.resources | default([]) | first) | default({}, true) }}"
+  changed_when: false
+  when: not ansible_check_mode

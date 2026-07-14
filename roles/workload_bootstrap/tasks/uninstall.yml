@@ -1,0 +1,32 @@
+---
+- name: Stage workload bootstrap artifacts
+  ansible.builtin.import_tasks: stage.yml
+
+- name: Delete workload bootstrap Jobs
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: delete_labelled
+  vars:
+    dev_infra_deployment_delete_kind: Job
+    dev_infra_deployment_delete_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_delete_label_selectors:
+      - app.kubernetes.io/name=helm-bootstrap
+
+- name: Delete workload bootstrap manifests
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: delete_manifest
+  vars:
+    dev_infra_deployment_delete_path: "{{ dev_infra_deployment_workload_bootstrap_artifacts_root }}/manifests"
+
+- name: Delete application namespace
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    state: absent
+    api_version: v1
+    kind: Namespace
+    name: "{{ dev_infra_deployment_namespace }}"
+    wait: true
+    wait_timeout: "{{ dev_infra_deployment_long_wait_timeout_seconds }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

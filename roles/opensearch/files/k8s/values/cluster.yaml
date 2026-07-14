@@ -1,0 +1,130 @@
+---
+clusterName: opensearch
+clusterDomain: cluster.local
+nodeGroup: master
+masterService: opensearch
+singleNode: false
+majorVersion: "3"
+
+serviceName: opensearch
+headlessServiceName: opensearch-headless
+protocol: http
+httpPort: 9200
+transportPort: 9300
+metricsPort: 9600
+
+service:
+  type: ClusterIP
+  httpPortName: http
+  transportPortName: transport
+  metricsPortName: metrics
+  annotations: {}
+
+podManagementPolicy: Parallel
+updateStrategy: RollingUpdate
+enableServiceLinks: false
+terminationGracePeriod: 120
+rbac:
+  create: false
+  automountServiceAccountToken: false
+
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+sysctlInit:
+  enabled: true
+  image: busybox
+  imageTag: "1.36"
+sysctlVmMaxMapCount: 262144
+
+antiAffinity: soft
+antiAffinityTopologyKey: kubernetes.io/hostname
+maxUnavailable: 1
+
+extraEnvs:
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: opensearch-admin-credentials
+        key: password
+  - name: DISABLE_INSTALL_DEMO_CONFIG
+    value: "true"
+
+config:
+  opensearch.yml: |
+    cluster.name: {{ .Values.clusterName | quote }}
+    node.name: ${POD_NAME}
+    node.roles:
+      {{- toYaml .Values.roles | nindent 6 }}
+    network.host: 0.0.0.0
+    http.port: {{ .Values.httpPort }}
+    transport.port: {{ .Values.transportPort }}
+    discovery.seed_hosts:
+      {{- $root := . }}
+      {{- $headless := .Values.headlessServiceName | default (printf "%s-headless" .Values.masterService) }}
+      {{- range $i := until (int .Values.replicas) }}
+      - {{ printf "%s-%d.%s.%s.svc.%s:%d" $root.Values.fullnameOverride $i $headless $root.Release.Namespace ($root.Values.clusterDomain | default "cluster.local") (int $root.Values.transportPort) | quote }}
+      {{- end }}
+    cluster.initial_cluster_manager_nodes:
+      {{- range $i := until (int .Values.replicas) }}
+      - {{ printf "%s-%d" $root.Values.fullnameOverride $i | quote }}
+      {{- end }}
+    plugins.security.disabled: false
+    plugins.security.allow_default_init_securityindex: true
+    plugins.security.ssl.transport.pemcert_filepath: /usr/share/opensearch/config/certs/transport/tls.crt
+    plugins.security.ssl.transport.pemkey_filepath: /usr/share/opensearch/config/certs/transport/tls.key
+    plugins.security.ssl.transport.pemtrustedcas_filepath: /usr/share/opensearch/config/trust/transport/ca-bundle.crt
+    plugins.security.ssl.transport.enforce_hostname_verification: false
+    plugins.security.ssl.http.enabled: false
+    plugins.security.authcz.admin_dn:
+      - "CN=opensearch-admin"
+    plugins.security.nodes_dn:
+      - "CN=opensearch-node"
+    plugins.security.restapi.roles_enabled:
+      - all_access
+      - security_rest_api_access
+    plugins.security.system_indices.enabled: true
+    plugins.security.system_indices.indices:
+      - ".opendistro-alerting-config"
+      - ".opendistro-alerting-alert*"
+      - ".opendistro-anomaly-results*"
+      - ".opendistro-anomaly-detector*"
+      - ".opendistro-anomaly-checkpoints"
+      - ".opendistro-anomaly-detection-state"
+      - ".opendistro-reports-*"
+      - ".opendistro-notifications-*"
+      - ".opendistro-notebooks"
+      - ".opendistro-asynchronous-search-response*"
+
+replicas: 3
+roles:
+  - cluster_manager
+  - data
+  - ingest
+  - remote_cluster_client
+opensearchJavaOpts: "-Xms1g -Xmx1g"
+persistence:
+  enabled: true
+  storageClass: local-path
+  size: 20Gi
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    memory: 2Gi
+nodeSelector: {}
+tolerations: []

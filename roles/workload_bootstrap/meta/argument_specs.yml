@@ -1,0 +1,19 @@
+---
+argument_specs:
+  bootstrap:
+    short_description: Bootstrap workload Kubernetes resources and root TLS trust jobs.
+    options: {}
+  configure:
+    short_description:
+      Reconcile workload bootstrap trust bundle patching and certificate renewal jobs.
+    options: {}
+  uninstall:
+    short_description:
+      Remove workload bootstrap Kubernetes resources and application namespace data.
+    options: {}
+  verify:
+    short_description: Verify workload bootstrap trust resources.
+    options: {}
+  stage:
+    short_description: Stage workload bootstrap-owned static artifacts on the target host.
+    options: {}

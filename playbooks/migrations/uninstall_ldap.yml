@@ -1,0 +1,10 @@
+---
+- name: Remove legacy LDAP workload
+  hosts: k8s_workload_mgr
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Uninstall legacy LDAP resources
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.ldap
+        tasks_from: uninstall

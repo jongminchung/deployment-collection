@@ -1,0 +1,67 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tls-root-ca-converge-renew
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: helm-bootstrap
+    app.kubernetes.io/component: tls-root-ca-renew
+    app.kubernetes.io/managed-by: taskfile
+spec:
+  activeDeadlineSeconds: 2400
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: helm-bootstrap
+        app.kubernetes.io/component: tls-root-ca-renew
+    spec:
+      serviceAccountName: helm-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: tls-root-ca-renew
+          image: docker.io/alpine/k8s:1.33.13
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              apk add --no-cache openssl >/dev/null
+              arch="$(uname -m)"
+              case "$arch" in
+                x86_64 | amd64)
+                  cmctl_arch=amd64
+                  ;;
+                aarch64 | arm64)
+                  cmctl_arch=arm64
+                  ;;
+                *)
+                  echo "unsupported cmctl architecture: $arch" >&2
+                  exit 1
+                  ;;
+              esac
+              curl -fsSL -o /usr/local/bin/cmctl \
+                "https://github.com/cert-manager/cmctl/releases/latest/download/cmctl_linux_${cmctl_arch}"
+              chmod 0755 /usr/local/bin/cmctl
+              /opt/bootstrap/bin/tls-root-ca-converge.sh renew
+          env:
+            - name: GABIACLOUD_S3_NAMESPACE
+              value: gabiacloud-s3
+            - name: VAULT_ADDR
+              value: http://vault.vault.svc.cluster.local:8200
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: bootstrap-bin
+              mountPath: /opt/bootstrap/bin
+              readOnly: true
+      volumes:
+        - name: bootstrap-bin
+          configMap:
+            name: bootstrap-bin
+            defaultMode: 0555

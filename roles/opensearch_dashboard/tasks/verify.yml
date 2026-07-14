@@ -1,0 +1,53 @@
+---
+- name: Wait for Dashboard Deployment rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_rollout_resource: "deploy/{{ dev_infra_deployment_dashboard_deployment_name }}"
+    dev_infra_deployment_rollout_timeout: "{{ dev_infra_deployment_dashboard_timeout }}"
+    dev_infra_deployment_rollout_timeout_seconds: "{{ dev_infra_deployment_dashboard_timeout_seconds }}"
+
+- name: Wait for Dashboard Pods Ready
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_pods
+  vars:
+    dev_infra_deployment_pod_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_pod_selector: "{{ dev_infra_deployment_dashboard_pod_selector }}"
+    dev_infra_deployment_pod_timeout_seconds: "{{ dev_infra_deployment_dashboard_timeout_seconds }}"
+
+- name: Run Dashboard HTTPS smoke check
+  block:
+    - name: Read Dashboard pods
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        api_version: v1
+        kind: Pod
+        namespace: "{{ dev_infra_deployment_namespace }}"
+        label_selectors:
+          - "{{ dev_infra_deployment_dashboard_pod_selector }}"
+      register: dev_infra_deployment_dashboard_pods
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+
+    - name: Resolve Dashboard pod name
+      ansible.builtin.set_fact:
+        dev_infra_deployment_dashboard_pod_name:
+          "{{ (dev_infra_deployment_dashboard_pods.resources | map(attribute='metadata.name') | first) }}"
+
+    - name: Run Dashboard HTTP smoke check through pod exec
+      kubernetes.core.k8s_exec:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        namespace: "{{ dev_infra_deployment_namespace }}"
+        pod: "{{ dev_infra_deployment_dashboard_pod_name }}"
+        command: "curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:5601/api/status"
+      register: dev_infra_deployment_dashboard_smoke
+      until: dev_infra_deployment_dashboard_smoke.stdout in ['200', '302', '401']
+      retries: 30
+      delay: 5
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      changed_when: false
+  when: not ansible_check_mode

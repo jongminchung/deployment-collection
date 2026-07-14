@@ -1,0 +1,57 @@
+---
+apisix_namespace: apisix
+apisix_release_name: apisix
+apisix_chart_ref: apisix/apisix
+apisix_chart_version: 2.15.0
+apisix_chart_repo_name: apisix
+apisix_chart_repo_url: https://apache.github.io/apisix-helm-chart
+apisix_helm_install_script_url: https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+apisix_gateway_api_version: v1.5.1
+apisix_gateway_api_install_url:
+  "https://github.com/kubernetes-sigs/gateway-api/releases/download/{{ apisix_gateway_api_version
+  }}/standard-install.yaml"
+apisix_gateway_class_name: apisix
+apisix_gateway_name: public
+apisix_gateway_proxy_name: apisix-config
+apisix_controller_name: apisix.apache.org/apisix-ingress-controller
+apisix_gateway_external_dns_target: "{{ external_dns_target | default(ansible_host) }}"
+apisix_gateway_service_external_ips:
+  "{{ [k8s_private_ip | default(ansible_host)] if ((k8s_private_ip | default(ansible_host)
+  | default('')) | length > 0) else [] }}"
+apisix_gateway_annotations: {}
+apisix_gateway_wait_timeout: 180s
+apisix_origin_tls_cert: ""
+apisix_origin_tls_key: ""
+apisix_gateway_tls_secret_name: k8s-mgr-origin-tls
+apisix_gateway_https_certificate_refs: []
+apisix_gateway_extra_https_certificate_refs: []
+apisix_gateway_https_listeners: []
+apisix_admin_key: ""
+apisix_viewer_key: ""
+apisix_helm_values:
+  apisix:
+    ssl:
+      enabled: true
+  service:
+    type: LoadBalancer
+    externalTrafficPolicy: Local
+    externalIPs: "{{ apisix_gateway_service_external_ips }}"
+    http:
+      enabled: true
+      servicePort: 80
+    tls:
+      servicePort: 443
+  ingress-controller:
+    enabled: true
+    config:
+      listenerPortMatchMode: "off"
+    gatewayProxy:
+      createDefault: true
+      provider:
+        controlPlane:
+          service:
+            name: apisix-admin
+            port: 9180
+  etcd:
+    persistence:
+      storageClass: local-path

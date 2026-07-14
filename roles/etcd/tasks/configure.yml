@@ -1,0 +1,59 @@
+---
+- name: Stage etcd artifacts
+  ansible.builtin.import_tasks: stage.yml
+
+- name: Ensure application namespace exists
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: ensure_namespace
+  vars:
+    dev_infra_deployment_target_namespace: "{{ dev_infra_deployment_namespace }}"
+
+- name: Wait for root TLS ClusterIssuer
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_clusterissuer
+
+- name: Delete stale etcd client TLS resources
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: "{{ item.api_version }}"
+    kind: "{{ item.kind }}"
+    namespace: "{{ dev_infra_deployment_namespace }}"
+    name: "{{ item.name }}"
+    state: absent
+  loop: "{{ dev_infra_deployment_etcd_stale_tls_resources }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+
+- name: Apply etcd Certificate manifests
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: apply_manifest
+  vars:
+    dev_infra_deployment_apply_path: "{{ dev_infra_deployment_etcd_certificate_manifest }}"
+    dev_infra_deployment_apply_server_side: false
+
+- name: Wait for etcd peer Certificate
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_certificate
+  vars:
+    dev_infra_deployment_certificate_name: "{{ dev_infra_deployment_etcd_peer_certificate_name }}"
+    dev_infra_deployment_certificate_timeout_seconds: "{{ dev_infra_deployment_etcd_timeout_seconds }}"
+
+- name: Install or upgrade etcd Helm release
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_release
+  vars:
+    dev_infra_deployment_helm_release_name: "{{ dev_infra_deployment_etcd_release_name }}"
+    dev_infra_deployment_helm_chart_ref: "{{ dev_infra_deployment_etcd_chart_ref }}"
+    dev_infra_deployment_helm_chart_version: "{{ dev_infra_deployment_etcd_chart_version }}"
+    dev_infra_deployment_helm_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_helm_values_files: "{{ dev_infra_deployment_etcd_values_files }}"
+    dev_infra_deployment_helm_wait: true
+    dev_infra_deployment_helm_timeout: "{{ dev_infra_deployment_etcd_timeout }}"
+
+- name: Verify etcd after install
+  ansible.builtin.import_tasks: verify.yml

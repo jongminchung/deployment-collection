@@ -1,0 +1,29 @@
+---
+- name: Restart Kubernetes workloads
+  hosts: k8s_workload_mgr
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Prepare Kubernetes deployment prerequisites
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.k8s_deployment
+        tasks_from: prerequisites
+      tags: [always]
+  tasks:
+    - name: Restart etcd
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.etcd
+        tasks_from: restart
+      tags: [etcd]
+
+    - name: Restart OpenSearch
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.opensearch
+        tasks_from: restart
+      tags: [opensearch]
+
+    - name: Restart OpenSearch Dashboard
+      ansible.builtin.import_role:
+        name: dev_infra.deployment.opensearch_dashboard
+        tasks_from: restart
+      tags: [opensearch_dashboard, dashboard]

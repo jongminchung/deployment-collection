@@ -1,0 +1,25 @@
+---
+external_tls_certificate_label: External TLS
+external_tls_certificate_request_tags:
+  - all
+  - external_tls_certificate
+  - tls
+
+external_tls_certificate_namespace: ""
+external_tls_certificate_name: ""
+external_tls_certificate_secret_name: ""
+external_tls_certificate_issuer_name: ""
+external_tls_certificate_issuer_kind: ClusterIssuer
+external_tls_certificate_wait_timeout: 600s
+external_tls_certificate_manifest_path: /tmp/external-tls-certificate.yaml
+external_tls_certificate_cloudflare_api_token: ""
+external_tls_certificate_cloudflare_zone_id: ""
+external_tls_certificate_cloudflare_api_validate_certs: true
+external_tls_certificate_cloudflare_proxied: false
+external_tls_certificate_cloudflare_record_comment: managed by dev-infra external tls
+
+external_tls_certificate_dns_target: "{{ ansible_host }}"
+external_tls_certificate_dns_record_type: A
+external_tls_certificate_dns_ttl: 300
+external_tls_certificate_dns_records: []
+external_tls_certificate_dns_names: []

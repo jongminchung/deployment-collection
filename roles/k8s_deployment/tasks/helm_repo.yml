@@ -1,0 +1,24 @@
+---
+- name: Add Helm repository {{ dev_infra_deployment_helm_repo_name }}
+  kubernetes.core.helm_repository:
+    binary_path: "{{ dev_infra_deployment_helm_bin }}"
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    name: "{{ dev_infra_deployment_helm_repo_name }}"
+    repo_url: "{{ dev_infra_deployment_helm_repo_url }}"
+    force_update: true
+  check_mode: false
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+
+- name: Update Helm repository {{ dev_infra_deployment_helm_repo_name }}
+  kubernetes.core.helm:
+    binary_path: "{{ dev_infra_deployment_helm_bin }}"
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    release_name: dev-infra-deployment-repo-cache
+    release_namespace: kube-system
+    release_state: absent
+    update_repo_cache: true
+  check_mode: false
+  changed_when: false
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

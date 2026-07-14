@@ -1,0 +1,28 @@
+---
+- name: Skip Certificate {{ dev_infra_deployment_certificate_name }} readiness wait in check mode
+  ansible.builtin.debug:
+    msg:
+      "Skipping Certificate {{ dev_infra_deployment_certificate_name }} readiness wait because check mode
+      does not apply dependent resources."
+  when: ansible_check_mode
+
+- name: Wait for Certificate {{ dev_infra_deployment_certificate_name }}
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ dev_infra_deployment_certificate_namespace | default(dev_infra_deployment_namespace) }}"
+    name: "{{ dev_infra_deployment_certificate_name }}"
+  register: dev_infra_deployment_certificate_wait
+  until: >
+    (dev_infra_deployment_certificate_wait.resources | length > 0) and
+    (((dev_infra_deployment_certificate_wait.resources[0].status.conditions | default([])) |
+    selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list |
+    length) > 0)
+  retries:
+    "{{ ((dev_infra_deployment_certificate_timeout_seconds | default(dev_infra_deployment_wait_timeout_seconds))
+    | int / 5) | round(0, 'ceil') | int }}"
+  delay: 5
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  when: not ansible_check_mode

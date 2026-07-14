@@ -1,0 +1,220 @@
+---
+- name: Resolve {{ external_tls_certificate_label }} role request state
+  ansible.builtin.set_fact:
+    external_tls_certificate_role_requested_resolved:
+      "{{ ((ansible_run_tags | default(['all'])) | intersect(external_tls_certificate_request_tags)
+      | length) > 0 }}"
+  tags:
+    - always
+
+- name: Validate {{ external_tls_certificate_label }} settings
+  ansible.builtin.assert:
+    that:
+      - external_tls_certificate_namespace | length > 0
+      - external_tls_certificate_name | length > 0
+      - external_tls_certificate_secret_name | length > 0
+      - external_tls_certificate_issuer_name | length > 0
+      - external_tls_certificate_issuer_kind | length > 0
+      - external_tls_certificate_cloudflare_api_token | length > 0
+      - external_tls_certificate_cloudflare_zone_id | length > 0
+      - external_tls_certificate_dns_target | length > 0
+      - external_tls_certificate_dns_record_type == 'A'
+      - external_tls_certificate_dns_ttl | int >= 60
+      - external_tls_certificate_dns_records is iterable
+      - external_tls_certificate_dns_records is not string
+      - external_tls_certificate_dns_records | length > 0
+      - external_tls_certificate_dns_names is iterable
+      - external_tls_certificate_dns_names is not string
+      - external_tls_certificate_dns_names | length > 0
+      - external_tls_certificate_wait_timeout | length > 0
+      - external_tls_certificate_manifest_path | length > 0
+    fail_msg: "{{ external_tls_certificate_label }} settings are invalid."
+  no_log: true
+  when: external_tls_certificate_role_requested_resolved | bool
+  tags:
+    - always
+    - validate
+
+- name: Check {{ external_tls_certificate_label }} Cloudflare DNS record API access
+  ansible.builtin.uri:
+    url:
+      "https://api.cloudflare.com/client/v4/zones/{{
+      external_tls_certificate_cloudflare_zone_id }}/dns_records?per_page=1"
+    validate_certs: "{{ external_tls_certificate_cloudflare_api_validate_certs | bool }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ external_tls_certificate_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+    status_code: 200
+  become: false
+  register: external_tls_certificate_cloudflare_dns_records_access
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+
+- name: Validate {{ external_tls_certificate_label }} Cloudflare DNS record API access
+  ansible.builtin.assert:
+    that:
+      - external_tls_certificate_cloudflare_dns_records_access.status == 200
+      - external_tls_certificate_cloudflare_dns_records_access.json.success | default(false) | bool
+    fail_msg: >-
+      CLOUDFLARE_API_TOKEN must be a Cloudflare API token that can read and edit DNS records for
+      zone {{ external_tls_certificate_cloudflare_zone_id }}.
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+
+- name: Ensure {{ external_tls_certificate_label }} namespace exists
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - create
+      - namespace
+      - "{{ external_tls_certificate_namespace }}"
+  register: external_tls_certificate_namespace_create
+  changed_when: external_tls_certificate_namespace_create.rc == 0
+  failed_when:
+    - external_tls_certificate_namespace_create.rc != 0
+    - "'AlreadyExists' not in external_tls_certificate_namespace_create.stderr"
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+
+- name: Lookup {{ external_tls_certificate_label }} Cloudflare DNS records
+  ansible.builtin.uri:
+    url:
+      "https://api.cloudflare.com/client/v4/zones/{{
+      external_tls_certificate_cloudflare_zone_id }}/dns_records?type={{
+      external_tls_certificate_dns_record_type }}&name={{ item | urlencode }}"
+    validate_certs: "{{ external_tls_certificate_cloudflare_api_validate_certs | bool }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ external_tls_certificate_cloudflare_api_token }}"
+      Content-Type: application/json
+    return_content: true
+    status_code: 200
+  become: false
+  register: external_tls_certificate_dns_record_lookup
+  changed_when: false
+  no_log: true
+  loop: "{{ external_tls_certificate_dns_records }}"
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+
+- name: Create {{ external_tls_certificate_label }} Cloudflare DNS records
+  ansible.builtin.uri:
+    url:
+      "https://api.cloudflare.com/client/v4/zones/{{
+      external_tls_certificate_cloudflare_zone_id }}/dns_records"
+    validate_certs: "{{ external_tls_certificate_cloudflare_api_validate_certs | bool }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ external_tls_certificate_cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body: >-
+      {{
+        {
+          'type': external_tls_certificate_dns_record_type,
+          'name': item.item,
+          'content': external_tls_certificate_dns_target,
+          'ttl': external_tls_certificate_dns_ttl | int,
+          'proxied': external_tls_certificate_cloudflare_proxied | bool,
+          'comment': external_tls_certificate_cloudflare_record_comment
+        }
+      }}
+    return_content: true
+    status_code: 200
+  become: false
+  changed_when: true
+  no_log: true
+  loop: "{{ external_tls_certificate_dns_record_lookup.results | default([]) }}"
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+    - item.json.result | length == 0
+
+- name: Update {{ external_tls_certificate_label }} Cloudflare DNS records
+  ansible.builtin.uri:
+    url:
+      "https://api.cloudflare.com/client/v4/zones/{{
+      external_tls_certificate_cloudflare_zone_id }}/dns_records/{{ item.json.result[0].id
+      }}"
+    validate_certs: "{{ external_tls_certificate_cloudflare_api_validate_certs | bool }}"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ external_tls_certificate_cloudflare_api_token }}"
+      Content-Type: application/json
+    body_format: json
+    body: >-
+      {{
+        {
+          'type': external_tls_certificate_dns_record_type,
+          'name': item.item,
+          'content': external_tls_certificate_dns_target,
+          'ttl': external_tls_certificate_dns_ttl | int,
+          'proxied': external_tls_certificate_cloudflare_proxied | bool,
+          'comment': external_tls_certificate_cloudflare_record_comment
+        }
+      }}
+    return_content: true
+    status_code: 200
+  become: false
+  changed_when: true
+  no_log: true
+  loop: "{{ external_tls_certificate_dns_record_lookup.results | default([]) }}"
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+    - item.json.result | length > 0
+    - >-
+      (
+        item.json.result[0].content != external_tls_certificate_dns_target
+        or (item.json.result[0].proxied | bool) !=
+        (external_tls_certificate_cloudflare_proxied | bool)
+        or (item.json.result[0].comment | default('')) !=
+        external_tls_certificate_cloudflare_record_comment
+        or (item.json.result[0].ttl | int) != (external_tls_certificate_dns_ttl | int)
+      )
+
+- name: Render {{ external_tls_certificate_label }} Certificate manifest
+  ansible.builtin.template:
+    src: certificate.yaml.j2
+    dest: "{{ external_tls_certificate_manifest_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: external_tls_certificate_role_requested_resolved | bool
+
+- name: Apply {{ external_tls_certificate_label }} Certificate
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - apply
+      - -f
+      - "{{ external_tls_certificate_manifest_path }}"
+  register: external_tls_certificate_apply
+  changed_when: "'unchanged' not in external_tls_certificate_apply.stdout"
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode
+
+- name: Wait for {{ external_tls_certificate_label }} Certificate readiness
+  ansible.builtin.command:
+    argv:
+      - "{{ k8s_kubectl_bin | default('/var/lib/rancher/rke2/bin/kubectl') }}"
+      - wait
+      - --for=condition=Ready
+      - certificate/{{ external_tls_certificate_name }}
+      - --namespace
+      - "{{ external_tls_certificate_namespace }}"
+      - --timeout={{ external_tls_certificate_wait_timeout }}
+  changed_when: false
+  when:
+    - external_tls_certificate_role_requested_resolved | bool
+    - not ansible_check_mode

@@ -1,0 +1,20 @@
+---
+argument_specs:
+  configure:
+    short_description: Configure or update OpenSearch Dashboard and apply Dashboard-owned artifacts.
+    options: {}
+  pull:
+    short_description: Pull Dashboard images into RKE2 containerd.
+    options: {}
+  restart:
+    short_description: Restart Dashboard workloads explicitly.
+    options: {}
+  uninstall:
+    short_description: Remove Dashboard release, local manifests, and stale TLS resources.
+    options: {}
+  verify:
+    short_description: Verify Dashboard workload readiness.
+    options: {}
+  stage:
+    short_description: Stage Dashboard-owned static artifacts on the target host.
+    options: {}

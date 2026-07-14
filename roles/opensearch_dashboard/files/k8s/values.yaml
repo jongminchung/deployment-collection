@@ -1,0 +1,85 @@
+---
+fullnameOverride: opensearch-dashboard
+nameOverride: opensearch-dashboard
+opensearch:
+  username: kibanaserver
+  url: http://opensearch.gabiacloud-s3.svc:9200
+secrets:
+  configName: opensearch-dashboard-config
+image:
+  repository: opensearchproject/opensearch-dashboards
+  tag: 3.7.0
+  pullPolicy: IfNotPresent
+opensearchHosts: http://opensearch.gabiacloud-s3.svc:9200
+opensearchAccount:
+  secret: opensearch-dashboard-config
+  keyPassphrase:
+    enabled: false
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+  annotations: {}
+  name: ""
+rbac:
+  create: false
+labels:
+  app.kubernetes.io/component: dashboard
+dashboardAnnotations: {}
+podAnnotations: {}
+podSecurityContext:
+  fsGroup: 1000
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+service:
+  type: ClusterIP
+  port: 5601
+  metricsPort: 9601
+  httpPortName: http
+  metricsPortName: metrics
+  annotations: {}
+updateStrategy:
+  type: RollingUpdate
+config:
+  opensearch_dashboards.yml: |
+    server.name: opensearch-dashboard
+    server.host: "0.0.0.0"
+    server.port: 5601
+
+    opensearch.hosts:
+      - {{ .Values.opensearchHosts | quote }}
+
+    opensearch_security.multitenancy.enabled: false
+    workspace.enabled: true
+    explore.enabled: true
+    data_source.enabled: true
+    datasetManagement.enabled: true
+    data.savedQueriesNewUI.enabled: true
+extraObjects:
+  - |
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: {{ .Values.secrets.configName }}
+      namespace: {{ .Release.Namespace }}
+      labels:
+        {{- include "opensearch-dashboards.labels" . | nindent 4 }}
+        app.kubernetes.io/component: dashboard
+    type: Opaque
+    stringData:
+      username: {{ .Values.opensearch.username | quote }}
+      password: {{ required "opensearch.password is required" .Values.opensearch.password | quote }}
+      cookie: {{ required "opensearch.password is required" .Values.opensearch.password | sha256sum | trunc 32 | quote }}
+      opensearch-password: {{ required "opensearch.password is required" .Values.opensearch.password | quote }}
+replicaCount: 1
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 512Mi

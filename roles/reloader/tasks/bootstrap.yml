@@ -1,0 +1,38 @@
+---
+- name: Ensure Reloader namespace exists
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: ensure_namespace
+  vars:
+    dev_infra_deployment_target_namespace: "{{ dev_infra_deployment_reloader_namespace }}"
+
+- name: Configure Stakater Helm repository
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_repo
+  vars:
+    dev_infra_deployment_helm_repo_name: "{{ dev_infra_deployment_reloader_repo_name }}"
+    dev_infra_deployment_helm_repo_url: "{{ dev_infra_deployment_reloader_repo_url }}"
+
+- name: Install or upgrade Reloader Helm release
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_release
+  vars:
+    dev_infra_deployment_helm_release_name: "{{ dev_infra_deployment_reloader_release_name }}"
+    dev_infra_deployment_helm_chart_ref: "{{ dev_infra_deployment_reloader_chart_ref }}"
+    dev_infra_deployment_helm_chart_version: "{{ dev_infra_deployment_reloader_chart_version }}"
+    dev_infra_deployment_helm_namespace: "{{ dev_infra_deployment_reloader_namespace }}"
+    dev_infra_deployment_helm_set_values: "{{ dev_infra_deployment_reloader_set_values }}"
+    dev_infra_deployment_helm_wait: true
+    dev_infra_deployment_helm_timeout: "{{ dev_infra_deployment_reloader_timeout }}"
+
+- name: Wait for Reloader rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_reloader_namespace }}"
+    dev_infra_deployment_rollout_resource: "deployment/{{ dev_infra_deployment_reloader_deployment_name }}"
+    dev_infra_deployment_rollout_timeout: "{{ dev_infra_deployment_reloader_timeout }}"
+    dev_infra_deployment_rollout_timeout_seconds: "{{ dev_infra_deployment_reloader_timeout_seconds }}"

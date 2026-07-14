@@ -1,0 +1,49 @@
+---
+apiVersion: apisix.apache.org/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: opensearch-dashboard-http-backend
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: opensearch-dashboard
+    app.kubernetes.io/instance: opensearch-dashboard
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/managed-by: taskfile
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: opensearch-dashboard
+      sectionName: http
+  scheme: http
+  passHost: pass
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: opensearch-dashboard
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: opensearch-dashboard
+    app.kubernetes.io/instance: opensearch-dashboard
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/managed-by: taskfile
+spec:
+  parentRefs:
+    - name: public
+      namespace: apisix
+      sectionName: http
+    - name: public
+      namespace: apisix
+      sectionName: apps-https
+  hostnames:
+    - opensearch-dashboard.apps.jamie.kr
+  rules:
+    - name: opensearch-dashboard
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: opensearch-dashboard
+          port: 5601

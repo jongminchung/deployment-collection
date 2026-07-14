@@ -1,0 +1,108 @@
+---
+- name: Skip Kubernetes Job {{ dev_infra_deployment_job_name }} in check mode
+  ansible.builtin.debug:
+    msg:
+      "Skipping Kubernetes Job {{ dev_infra_deployment_job_name }} because check mode must not create or
+      delete Jobs."
+  when: ansible_check_mode
+
+- name: Run Kubernetes Job {{ dev_infra_deployment_job_name }}
+  block:
+    - name: Delete previous Kubernetes Job {{ dev_infra_deployment_job_name }}
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        state: absent
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ dev_infra_deployment_job_namespace }}"
+        name: "{{ dev_infra_deployment_job_name }}"
+        wait: true
+        wait_timeout: "{{ dev_infra_deployment_job_delete_timeout_seconds }}"
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+
+    - name: Apply Kubernetes Job manifest {{ dev_infra_deployment_job_manifest }}
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        state: present
+        src: "{{ dev_infra_deployment_job_manifest }}"
+        apply: true
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+
+    - name: Wait for Kubernetes Job {{ dev_infra_deployment_job_name }} to complete
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ dev_infra_deployment_job_namespace }}"
+        name: "{{ dev_infra_deployment_job_name }}"
+        wait: true
+        wait_condition:
+          type: Complete
+          status: "True"
+        wait_sleep: "{{ dev_infra_deployment_job_wait_sleep_seconds }}"
+        wait_timeout:
+          "{{ dev_infra_deployment_job_timeout_seconds | default(dev_infra_deployment_wait_timeout_seconds) }}"
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      changed_when: false
+  rescue:
+    - name: Read failed Kubernetes Job {{ dev_infra_deployment_job_name }} logs
+      kubernetes.core.k8s_log:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ dev_infra_deployment_job_namespace }}"
+        name: "{{ dev_infra_deployment_job_name }}"
+        all_containers: true
+        tail_lines: 200
+      register: dev_infra_deployment_job_log
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      failed_when: false
+      changed_when: false
+
+    - name: Show failed Kubernetes Job {{ dev_infra_deployment_job_name }} logs
+      ansible.builtin.debug:
+        var: dev_infra_deployment_job_log.log_lines
+      when: dev_infra_deployment_job_log.log_lines is defined
+
+    - name: Fail Kubernetes Job {{ dev_infra_deployment_job_name }}
+      ansible.builtin.fail:
+        msg: "Kubernetes Job {{ dev_infra_deployment_job_name }} did not complete successfully."
+  always:
+    - name: Delete Kubernetes Job {{ dev_infra_deployment_job_name }} after run
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        state: absent
+        api_version: batch/v1
+        kind: Job
+        namespace: "{{ dev_infra_deployment_job_namespace }}"
+        name: "{{ dev_infra_deployment_job_name }}"
+        delete_options:
+          propagationPolicy: Background
+        wait: true
+        wait_timeout: "{{ dev_infra_deployment_job_delete_timeout_seconds }}"
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      when: not ansible_check_mode
+
+    - name: Delete Kubernetes Job Pods {{ dev_infra_deployment_job_name }} after run
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        state: absent
+        api_version: v1
+        kind: Pod
+        namespace: "{{ dev_infra_deployment_job_namespace }}"
+        label_selectors:
+          - "batch.kubernetes.io/job-name={{ dev_infra_deployment_job_name }}"
+        delete_all: true
+        delete_options:
+          gracePeriodSeconds: 0
+        wait: true
+        wait_timeout: "{{ dev_infra_deployment_job_delete_timeout_seconds }}"
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      when: not ansible_check_mode
+  when: not ansible_check_mode

@@ -1,0 +1,93 @@
+set -euo pipefail
+export VAULT_ADDR={{ internal_pki_issuer_vault_addr | quote }}
+export VAULT_TOKEN={{ internal_pki_issuer_vault_initial_root_token | quote }}
+
+PKI_PATH={{ internal_pki_issuer_vault_pki_path | quote }}
+ROOT_COMMON_NAME={{ internal_pki_issuer_vault_root_common_name | quote }}
+ROOT_TTL={{ internal_pki_issuer_vault_root_ttl | quote }}
+LEAF_TTL={{ internal_pki_issuer_vault_leaf_ttl | quote }}
+LEAF_MAX_TTL={{ internal_pki_issuer_vault_leaf_max_ttl | quote }}
+ISSUER_NAME={{ internal_pki_issuer_name | quote }}
+VAULT_SERVICE_ADDR={{ internal_pki_issuer_vault_service_addr | quote }}
+SERVICE_ACCOUNT={{ internal_pki_issuer_service_account_name | quote }}
+CERT_MANAGER_NAMESPACE={{ internal_pki_issuer_cert_manager_namespace | quote }}
+
+ensure_mount() {
+  if vault secrets list | grep -q "^${PKI_PATH}/"; then
+    return
+  fi
+  vault secrets enable -path="$PKI_PATH" pki >/dev/null
+}
+
+ensure_kubernetes_auth() {
+  if vault auth list | grep -q '^kubernetes/'; then
+    return
+  fi
+  vault auth enable kubernetes >/dev/null
+}
+
+ensure_pki_root_ca() {
+  if vault read -field=certificate "${PKI_PATH}/cert/ca" >/dev/null 2>&1; then
+    return
+  fi
+
+  vault write "${PKI_PATH}/root/generate/internal" \
+    common_name="$ROOT_COMMON_NAME" \
+    ttl="$ROOT_TTL" \
+    key_type=ec \
+    key_bits=256 >/dev/null
+}
+
+ensure_current_pki_issuer() {
+  if ! vault read "${PKI_PATH}/issuer/current" >/dev/null 2>&1; then
+    vault write "${PKI_PATH}/issuer/default" issuer_name=current >/dev/null || true
+  fi
+
+  vault write "${PKI_PATH}/config/issuers" \
+    default=current \
+    default_follows_latest_issuer=false >/dev/null
+}
+
+vault status >/dev/null
+ensure_mount
+vault secrets tune -max-lease-ttl="$ROOT_TTL" "$PKI_PATH"
+ensure_pki_root_ca
+ensure_current_pki_issuer
+
+vault write "${PKI_PATH}/config/urls" \
+  issuing_certificates="${VAULT_SERVICE_ADDR}/v1/${PKI_PATH}/ca" \
+  crl_distribution_points="${VAULT_SERVICE_ADDR}/v1/${PKI_PATH}/crl" >/dev/null
+
+vault write "${PKI_PATH}/roles/${ISSUER_NAME}" \
+  allow_any_name=true \
+  enforce_hostnames=false \
+  allow_ip_sans=true \
+  server_flag=true \
+  client_flag=true \
+  key_type=any \
+  ttl="$LEAF_TTL" \
+  max_ttl="$LEAF_MAX_TTL" >/dev/null
+
+ensure_kubernetes_auth
+
+vault write auth/kubernetes/config \
+  kubernetes_host="https://kubernetes.default.svc" \
+  disable_iss_validation=true >/dev/null
+
+vault policy write "$ISSUER_NAME" - <<POLICY
+path "${PKI_PATH}/sign/${ISSUER_NAME}" {
+  capabilities = ["create", "update"]
+}
+path "${PKI_PATH}/issue/${ISSUER_NAME}" {
+  capabilities = ["create", "update"]
+}
+POLICY
+
+vault write "auth/kubernetes/role/${ISSUER_NAME}" \
+  bound_service_account_names="$SERVICE_ACCOUNT" \
+  bound_service_account_namespaces="$CERT_MANAGER_NAMESPACE" \
+  audience="vault://${ISSUER_NAME}" \
+  policies="$ISSUER_NAME" \
+  ttl=1h >/dev/null
+
+echo "Vault internal PKI issuer ${ISSUER_NAME} configured."

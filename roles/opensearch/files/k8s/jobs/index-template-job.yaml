@@ -1,0 +1,199 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opensearch-index-template
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/instance: opensearch
+    app.kubernetes.io/component: index-template
+    app.kubernetes.io/managed-by: taskfile
+spec:
+  activeDeadlineSeconds: 900
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opensearch
+        app.kubernetes.io/instance: opensearch
+        app.kubernetes.io/component: index-template
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: index-template
+          image: curlimages/curl:8.11.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OPENSEARCH_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-admin-credentials
+                  key: password
+          command:
+            - sh
+            - -ec
+            - |
+              cat > /tmp/gcloud-s3gw-metrics.json <<'JSON'
+              {
+                "index_patterns": [
+                  "gcloud-s3gw-metrics*"
+                ],
+                "priority": 502,
+                "template": {
+                  "settings": {
+                    "number_of_shards": 1,
+                    "number_of_replicas": 1
+                  },
+                  "aliases": {
+                    "metrics-apisix-alias": {}
+                  },
+                  "mappings": {
+                    "properties": {
+                      "@timestamp": {
+                        "type": "date"
+                      },
+                      "cluster": {
+                        "type": "keyword"
+                      },
+                      "country": {
+                        "type": "keyword"
+                      },
+                      "s3": {
+                        "properties": {
+                          "bucket_id": {
+                            "type": "long"
+                          },
+                          "bucket": {
+                            "type": "keyword"
+                          },
+                          "action": {
+                            "type": "keyword"
+                          }
+                        }
+                      },
+                      "upstream_latency": {
+                        "type": "float"
+                      },
+                      "response": {
+                        "properties": {
+                          "size": {
+                            "type": "long"
+                          },
+                          "headers": {
+                            "type": "object",
+                            "dynamic": true
+                          },
+                          "status": {
+                            "type": "integer"
+                          }
+                        }
+                      },
+                      "upstream": {
+                        "type": "keyword"
+                      },
+                      "route_id": {
+                        "type": "keyword"
+                      },
+                      "network_type": {
+                        "type": "keyword"
+                      },
+                      "client_ip": {
+                        "type": "ip"
+                      },
+                      "server": {
+                        "properties": {
+                          "hostname": {
+                            "type": "keyword"
+                          },
+                          "version": {
+                            "type": "keyword"
+                          }
+                        }
+                      },
+                      "consumer": {
+                        "properties": {
+                          "key_name": {
+                            "type": "keyword"
+                          },
+                          "tenant_id": {
+                            "type": "keyword"
+                          },
+                          "tenant_user_id": {
+                            "type": "keyword"
+                          }
+                        }
+                      },
+                      "latency": {
+                        "type": "float"
+                      },
+                      "response_content_length_bytes": {
+                        "type": "long"
+                      },
+                      "service_id": {
+                        "type": "keyword"
+                      },
+                      "request": {
+                        "properties": {
+                          "size": {
+                            "type": "long"
+                          },
+                          "headers": {
+                            "type": "object",
+                            "dynamic": true
+                          },
+                          "url": {
+                            "type": "keyword"
+                          },
+                          "uri": {
+                            "type": "keyword"
+                          },
+                          "method": {
+                            "type": "keyword"
+                          },
+                          "querystring": {
+                            "type": "object",
+                            "enabled": false
+                          }
+                        }
+                      },
+                      "apisix_latency": {
+                        "type": "float"
+                      },
+                      "start_time": {
+                        "type": "date",
+                        "format": "epoch_millis"
+                      },
+                      "log": {
+                        "type": "text",
+                        "fields": {
+                          "keyword": {
+                            "type": "keyword",
+                            "ignore_above": 256
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              JSON
+              curl --fail --show-error --silent \
+                --retry 30 \
+                --retry-delay 10 \
+                --retry-all-errors \
+                --request PUT \
+                --header 'Content-Type: application/json' \
+                --user "admin:${OPENSEARCH_ADMIN_PASSWORD}" \
+                --data-binary @/tmp/gcloud-s3gw-metrics.json \
+                http://opensearch-0.opensearch-headless.gabiacloud-s3.svc.cluster.local:9200/_index_template/gcloud-s3gw-metrics
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

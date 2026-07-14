@@ -1,0 +1,56 @@
+---
+- name: Wait for OpenSearch StatefulSet rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_rollout_resource: "sts/{{ dev_infra_deployment_opensearch_statefulset_name }}"
+    dev_infra_deployment_rollout_timeout: "{{ dev_infra_deployment_opensearch_rollout_timeout }}"
+    dev_infra_deployment_rollout_timeout_seconds:
+      "{{ dev_infra_deployment_opensearch_rollout_timeout_seconds }}"
+
+- name: Wait for OpenSearch Pods Ready
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_pods
+  vars:
+    dev_infra_deployment_pod_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_pod_selector: "{{ dev_infra_deployment_opensearch_workload_pod_selector }}"
+    dev_infra_deployment_pod_timeout_seconds: "{{ dev_infra_deployment_opensearch_timeout_seconds }}"
+
+- name: Check OpenSearch cluster health
+  block:
+    - name: Read OpenSearch admin credentials
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        api_version: v1
+        kind: Secret
+        namespace: "{{ dev_infra_deployment_namespace }}"
+        name: opensearch-admin-credentials
+      register: dev_infra_deployment_opensearch_admin_secret
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      no_log: true
+
+    - name: Resolve OpenSearch admin password
+      ansible.builtin.set_fact:
+        dev_infra_deployment_opensearch_admin_password:
+          "{{ dev_infra_deployment_opensearch_admin_secret.resources[0].data.password | b64decode }}"
+      no_log: true
+
+    - name: Check OpenSearch cluster health through pod exec
+      kubernetes.core.k8s_exec:
+        kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+        namespace: "{{ dev_infra_deployment_namespace }}"
+        pod: "{{ dev_infra_deployment_opensearch_statefulset_name }}-0"
+        command:
+          "curl --fail --silent --show-error -u 'admin:{{ dev_infra_deployment_opensearch_admin_password
+          }}' 'http://opensearch-0.opensearch-headless.{{ dev_infra_deployment_namespace
+          }}.svc.cluster.local:9200/_cluster/health?wait_for_status=yellow&timeout=60s'"
+      vars:
+        ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+      changed_when: false
+      no_log: true
+  no_log: true
+  when: not ansible_check_mode

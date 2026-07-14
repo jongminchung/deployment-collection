@@ -1,0 +1,28 @@
+---
+- name: Skip pod readiness wait for {{ dev_infra_deployment_pod_selector }} in check mode
+  ansible.builtin.debug:
+    msg:
+      "Skipping pod readiness wait for selector {{ dev_infra_deployment_pod_selector }} because check mode
+      does not create or roll pods."
+  when: ansible_check_mode
+
+- name: Wait for pods matching {{ dev_infra_deployment_pod_selector }}
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: v1
+    kind: Pod
+    namespace: "{{ dev_infra_deployment_pod_namespace }}"
+    label_selectors:
+      - "{{ dev_infra_deployment_pod_selector }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_sleep: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
+    wait_timeout:
+      "{{ dev_infra_deployment_pod_timeout_seconds | default(dev_infra_deployment_wait_timeout_seconds) }}"
+  register: dev_infra_deployment_pod_wait
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  changed_when: false
+  when: not ansible_check_mode

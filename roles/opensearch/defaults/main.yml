@@ -1,0 +1,49 @@
+---
+dev_infra_deployment_opensearch_release_name: opensearch
+dev_infra_deployment_opensearch_repo_name: opensearch
+dev_infra_deployment_opensearch_repo_url: https://opensearch-project.github.io/helm-charts/
+dev_infra_deployment_opensearch_chart_ref: opensearch/opensearch
+dev_infra_deployment_opensearch_chart_version: 3.7.0
+dev_infra_deployment_opensearch_transport_certificate_name: opensearch-transport-tls
+dev_infra_deployment_opensearch_stale_tls_resources:
+  - api_version: cert-manager.io/v1
+    kind: Certificate
+    name: opensearch-http-tls
+  - api_version: v1
+    kind: Secret
+    name: opensearch-http-tls
+  - api_version: cert-manager.io/v1
+    kind: Certificate
+    name: opensearch-admin-tls
+  - api_version: v1
+    kind: Secret
+    name: opensearch-admin-tls
+dev_infra_deployment_opensearch_stale_local_resources:
+  - api_version: apisix.apache.org/v1alpha1
+    kind: BackendTrafficPolicy
+    name: opensearch-https-backend
+  - api_version: batch/v1
+    kind: Job
+    name: opensearch-securityadmin
+dev_infra_deployment_opensearch_statefulset_name: opensearch
+dev_infra_deployment_opensearch_pod_selector: app.kubernetes.io/instance=opensearch
+dev_infra_deployment_opensearch_workload_pod_selector: app.kubernetes.io/component=opensearch
+dev_infra_deployment_opensearch_index_template_job_name: opensearch-index-template
+dev_infra_deployment_opensearch_rollout_timeout: 10m
+dev_infra_deployment_opensearch_rollout_timeout_seconds: 600
+dev_infra_deployment_opensearch_timeout: 5m
+dev_infra_deployment_opensearch_timeout_seconds: 300
+dev_infra_deployment_opensearch_job_timeout: 15m
+dev_infra_deployment_opensearch_job_timeout_seconds: 900
+opensearch_admin_password: ""
+opensearch_admin_password_hash: ""
+opensearch_kibanaserver_password: ""
+opensearch_kibanaserver_password_hash: ""
+opensearch_metric_consumer_password: ""
+opensearch_metric_consumer_password_hash: ""
+opensearch_fluentbit_password: ""
+opensearch_fluentbit_password_hash: ""
+dev_infra_deployment_opensearch_images:
+  - docker.io/opensearchproject/opensearch:3.7.0
+  - docker.io/curlimages/curl:8.11.1
+  - docker.io/busybox:1.36

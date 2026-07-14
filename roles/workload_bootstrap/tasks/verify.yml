@@ -1,0 +1,68 @@
+---
+- name: Read root TLS trust bundle ConfigMap
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: v1
+    kind: ConfigMap
+    namespace: "{{ dev_infra_deployment_namespace }}"
+    name: root-tls-ca-trust-bundle
+  register: dev_infra_deployment_root_tls_trust_bundle
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  changed_when: false
+
+- name: Verify root TLS trust bundle exists
+  ansible.builtin.assert:
+    that:
+      - dev_infra_deployment_root_tls_trust_bundle.resources | length == 1
+    fail_msg:
+      "ConfigMap/root-tls-ca-trust-bundle must exist in namespace {{ dev_infra_deployment_namespace }}."
+
+- name: Read application Certificates
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ dev_infra_deployment_namespace }}"
+  register: dev_infra_deployment_certificates
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  changed_when: false
+
+- name: Verify root TLS managed Certificate labels
+  ansible.builtin.assert:
+    that:
+      - (item.metadata.labels | default({}))['pki.jamie.kr/root-tls-ca-managed'] | default('') ==
+        'true'
+    fail_msg:
+      "Certificate/{{ item.metadata.name }} uses ClusterIssuer/root-tls-ca but is missing
+      pki.jamie.kr/root-tls-ca-managed=true."
+  loop: "{{ dev_infra_deployment_certificates.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  when:
+    - item.spec.issuerRef.name | default('') == 'root-tls-ca'
+    - item.spec.issuerRef.kind | default('ClusterIssuer') == 'ClusterIssuer'
+
+- name: Wait for managed root TLS Certificates
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ dev_infra_deployment_namespace }}"
+    name: "{{ item.metadata.name }}"
+    wait: true
+    wait_condition:
+      type: Ready
+      status: "True"
+    wait_sleep: 5
+    wait_timeout: "{{ dev_infra_deployment_wait_timeout_seconds }}"
+  loop: "{{ dev_infra_deployment_certificates.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  changed_when: false
+  when:
+    - (item.metadata.labels | default({}))['pki.jamie.kr/root-tls-ca-managed'] | default('') ==
+      'true'

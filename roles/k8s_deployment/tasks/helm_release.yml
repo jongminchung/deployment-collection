@@ -1,0 +1,16 @@
+---
+- name: Install or upgrade Helm release {{ dev_infra_deployment_helm_release_name }}
+  kubernetes.core.helm:
+    binary_path: "{{ dev_infra_deployment_helm_bin }}"
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    release_name: "{{ dev_infra_deployment_helm_release_name }}"
+    chart_ref: "{{ dev_infra_deployment_helm_chart_ref }}"
+    chart_version: "{{ dev_infra_deployment_helm_chart_version }}"
+    release_namespace: "{{ dev_infra_deployment_helm_namespace }}"
+    create_namespace: true
+    values_files: "{{ dev_infra_deployment_helm_values_files | default([]) }}"
+    set_values: "{{ dev_infra_deployment_helm_set_values | default([]) }}"
+    wait: "{{ dev_infra_deployment_helm_wait | default(false) | bool }}"
+    timeout: "{{ dev_infra_deployment_helm_timeout | default(dev_infra_deployment_wait_timeout) }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

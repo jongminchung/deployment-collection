@@ -1,0 +1,44 @@
+---
+- name: Validate RKE2 image pull settings
+  ansible.builtin.assert:
+    that:
+      - dev_infra_deployment_image_refs is iterable
+      - dev_infra_deployment_image_refs is not string
+      - dev_infra_deployment_image_refs | length > 0
+      - dev_infra_deployment_image_file_name is match('^[A-Za-z0-9_.-]+\\.txt$')
+
+- name: Ensure RKE2 image import directory exists
+  ansible.builtin.file:
+    path: "{{ dev_infra_deployment_rke2_images_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure RKE2 online image imports
+  ansible.builtin.copy:
+    dest: "{{ dev_infra_deployment_rke2_images_dir }}/{{ dev_infra_deployment_image_file_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {% for image in dev_infra_deployment_image_refs | unique | sort %}
+      {{ image }}
+      {% endfor %}
+  register: dev_infra_deployment_image_import_file
+
+- name: Wait for requested images in RKE2 containerd
+  ansible.builtin.command:
+    argv:
+      - "{{ dev_infra_deployment_crictl_bin }}"
+      - --config
+      - "{{ dev_infra_deployment_crictl_config }}"
+      - inspecti
+      - "{{ item }}"
+  loop: "{{ dev_infra_deployment_image_refs | unique }}"
+  register: dev_infra_deployment_image_inspect
+  changed_when: false
+  retries: 60
+  delay: 5
+  until: dev_infra_deployment_image_inspect.rc == 0
+  when: not ansible_check_mode

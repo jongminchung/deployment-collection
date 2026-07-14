@@ -1,0 +1,54 @@
+---
+- name: Bootstrap workload trust resources
+  ansible.builtin.import_tasks: bootstrap.yml
+
+- name: Apply workload bootstrap manifests
+  ansible.builtin.import_tasks: apply.yml
+
+- name: Converge root TLS trust bundle
+  ansible.builtin.import_tasks: trust.yml
+
+- name: Patch TLS workloads for trust bundle
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: run_job
+  vars:
+    dev_infra_deployment_job_name: tls-workload-trust-patch
+    dev_infra_deployment_job_manifest:
+      "{{ dev_infra_deployment_workload_bootstrap_artifacts_root }}/jobs/tls-workload-trust-patch-job.yaml"
+    dev_infra_deployment_job_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_job_timeout_seconds: "{{ dev_infra_deployment_wait_timeout_seconds }}"
+
+- name: Wait for existing etcd dual trust rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_rollout_resource: sts/gabiacloud-s3-etcd
+    dev_infra_deployment_rollout_if_exists: true
+    dev_infra_deployment_rollout_timeout: 5m
+    dev_infra_deployment_rollout_timeout_seconds: "{{ dev_infra_deployment_wait_timeout_seconds }}"
+
+- name: Wait for existing OpenSearch dual trust rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_rollout_resource: sts/opensearch
+    dev_infra_deployment_rollout_if_exists: true
+    dev_infra_deployment_rollout_timeout: 10m
+    dev_infra_deployment_rollout_timeout_seconds: "{{ dev_infra_deployment_long_wait_timeout_seconds }}"
+
+- name: Renew leaf certificates after dual trust rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: run_job
+  vars:
+    dev_infra_deployment_job_name: tls-root-ca-converge-renew
+    dev_infra_deployment_job_manifest:
+      "{{ dev_infra_deployment_workload_bootstrap_artifacts_root
+      }}/jobs/tls-root-ca-converge-renew-job.yaml"
+    dev_infra_deployment_job_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_job_timeout_seconds: 2400

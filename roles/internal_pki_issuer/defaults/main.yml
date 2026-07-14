@@ -1,0 +1,22 @@
+---
+internal_pki_issuer_name: root-tls-ca
+internal_pki_issuer_vault_initial_root_token: "{{ vault_initial_root_token | default('') }}"
+internal_pki_issuer_vault_namespace: "{{ dev_infra_deployment_vault_namespace | default('vault') }}"
+internal_pki_issuer_vault_pod_name: "{{ dev_infra_deployment_vault_pod_name | default('vault-0') }}"
+internal_pki_issuer_vault_addr: http://127.0.0.1:8200
+internal_pki_issuer_vault_service_addr: http://vault.vault.svc.cluster.local:8200
+internal_pki_issuer_vault_pki_path: pki
+internal_pki_issuer_vault_root_common_name: root-tls-ca
+internal_pki_issuer_vault_root_ttl: 87600h
+internal_pki_issuer_vault_leaf_ttl: 720h
+internal_pki_issuer_vault_leaf_max_ttl: 2160h
+internal_pki_issuer_cert_manager_namespace: cert-manager
+internal_pki_issuer_service_account_name: root-tls-ca-issuer
+internal_pki_issuer_manifest_path: /tmp/internal-pki-issuer.yaml
+internal_pki_issuer_wait_timeout: "{{ dev_infra_deployment_wait_timeout | default('5m') }}"
+internal_pki_issuer_wait_timeout_seconds:
+  "{{ dev_infra_deployment_wait_timeout_seconds | default(300) }}"
+internal_pki_issuer_kubeconfig:
+  "{{ dev_infra_deployment_kubeconfig | default(k8s_kubeconfig | default('/etc/rancher/rke2/rke2.yaml')) }}"
+internal_pki_issuer_python_interpreter:
+  "{{ dev_infra_deployment_python_interpreter | default(ansible_playbook_python) }}"

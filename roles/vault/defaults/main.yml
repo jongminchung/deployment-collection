@@ -1,0 +1,16 @@
+---
+dev_infra_deployment_vault_namespace: vault
+dev_infra_deployment_vault_release_name: vault
+dev_infra_deployment_vault_repo_url: https://helm.releases.hashicorp.com
+dev_infra_deployment_vault_chart_ref: vault
+dev_infra_deployment_vault_chart_version: 0.33.0
+dev_infra_deployment_vault_helmchart_namespace: kube-system
+dev_infra_deployment_vault_helmchart_failure_policy: abort
+dev_infra_deployment_vault_pod_name: vault-0
+dev_infra_deployment_vault_pod_selector: app.kubernetes.io/instance=vault
+dev_infra_deployment_vault_timeout: 5m
+dev_infra_deployment_vault_timeout_seconds: 300
+vault_initial_root_token: ""
+vault_unseal_key: ""
+dev_infra_deployment_vault_images:
+  - docker.io/hashicorp/vault:2.0.2

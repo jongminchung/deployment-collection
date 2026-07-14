@@ -1,0 +1,32 @@
+---
+- name: Wait for etcd StatefulSet rollout
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_status
+  vars:
+    dev_infra_deployment_rollout_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_rollout_resource: "sts/{{ dev_infra_deployment_etcd_statefulset_name }}"
+    dev_infra_deployment_rollout_timeout: "{{ dev_infra_deployment_etcd_timeout }}"
+    dev_infra_deployment_rollout_timeout_seconds: "{{ dev_infra_deployment_etcd_timeout_seconds }}"
+
+- name: Wait for etcd Pods Ready
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_pods
+  vars:
+    dev_infra_deployment_pod_namespace: "{{ dev_infra_deployment_namespace }}"
+    dev_infra_deployment_pod_selector: "{{ dev_infra_deployment_etcd_pod_selector }}"
+    dev_infra_deployment_pod_timeout_seconds: "{{ dev_infra_deployment_etcd_timeout_seconds }}"
+
+- name: Check etcd endpoint health
+  kubernetes.core.k8s_exec:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    namespace: "{{ dev_infra_deployment_namespace }}"
+    pod: "{{ dev_infra_deployment_etcd_statefulset_name }}-0"
+    command:
+      "/opt/bitnami/etcd/bin/etcdctl --endpoints=http://gabiacloud-s3-etcd.{{
+      dev_infra_deployment_namespace }}.svc.cluster.local:2379 endpoint health"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  changed_when: false
+  when: not ansible_check_mode

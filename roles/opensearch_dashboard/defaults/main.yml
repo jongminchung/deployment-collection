@@ -1,0 +1,24 @@
+---
+dev_infra_deployment_dashboard_release_name: opensearch-dashboard
+dev_infra_deployment_dashboard_repo_name: opensearch
+dev_infra_deployment_dashboard_repo_url: https://opensearch-project.github.io/helm-charts/
+dev_infra_deployment_dashboard_chart_ref: opensearch/opensearch-dashboards
+dev_infra_deployment_dashboard_chart_version: 3.7.0
+dev_infra_deployment_dashboard_stale_tls_resources:
+  - api_version: cert-manager.io/v1
+    kind: Certificate
+    name: opensearch-dashboard-tls
+  - api_version: v1
+    kind: Secret
+    name: opensearch-dashboard-tls
+dev_infra_deployment_dashboard_stale_local_resources:
+  - api_version: apisix.apache.org/v1alpha1
+    kind: BackendTrafficPolicy
+    name: opensearch-dashboard-https-backend
+dev_infra_deployment_dashboard_deployment_name: opensearch-dashboard
+dev_infra_deployment_dashboard_pod_selector: app.kubernetes.io/instance=opensearch-dashboard
+dev_infra_deployment_dashboard_timeout: 5m
+dev_infra_deployment_dashboard_timeout_seconds: 300
+opensearch_dashboard_password: ""
+dev_infra_deployment_dashboard_images:
+  - docker.io/opensearchproject/opensearch-dashboards:3.7.0

@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opensearch-dashboard
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: opensearch-dashboard
+    app.kubernetes.io/instance: opensearch-dashboard
+    app.kubernetes.io/component: dashboard
+    app.kubernetes.io/managed-by: taskfile
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch-dashboard
+      app.kubernetes.io/instance: opensearch-dashboard
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5601
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: apisix
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: apisix
+              app.kubernetes.io/name: apisix
+      ports:
+        - protocol: TCP
+          port: 5601

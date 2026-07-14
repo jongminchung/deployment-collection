@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=kubernetes://schema/networking.k8s.io/v1@networkpolicy
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opensearch
+  namespace: gabiacloud-s3
+  labels:
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/instance: opensearch
+    app.kubernetes.io/component: opensearch
+    app.kubernetes.io/managed-by: taskfile
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opensearch
+      app.kubernetes.io/instance: opensearch
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: opensearch
+              app.kubernetes.io/instance: opensearch
+      ports:
+        - protocol: TCP
+          port: 9200
+        - protocol: TCP
+          port: 9300
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 9200
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: apisix
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: apisix
+              app.kubernetes.io/name: apisix
+      ports:
+        - protocol: TCP
+          port: 9200

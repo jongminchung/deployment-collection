@@ -1,0 +1,34 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: opensearch-transport-tls
+  namespace: gabiacloud-s3
+  labels:
+    pki.jamie.kr/root-tls-ca-managed: "true"
+spec:
+  secretName: opensearch-transport-tls
+  commonName: opensearch-node
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    encoding: PKCS8
+    rotationPolicy: Always
+  usages:
+    - digital signature
+    - key encipherment
+    - server auth
+    - client auth
+  dnsNames:
+    - opensearch-headless
+    - opensearch-headless.gabiacloud-s3
+    - opensearch-headless.gabiacloud-s3.svc
+    - opensearch-0.opensearch-headless.gabiacloud-s3.svc.cluster.local
+    - opensearch-1.opensearch-headless.gabiacloud-s3.svc.cluster.local
+    - opensearch-2.opensearch-headless.gabiacloud-s3.svc.cluster.local
+  issuerRef:
+    name: root-tls-ca
+    kind: ClusterIssuer
+    group: cert-manager.io

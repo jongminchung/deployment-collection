@@ -1,0 +1,23 @@
+---
+argument_specs:
+  configure:
+    short_description: Configure or update Vault and converge its seal state.
+    options: {}
+  kickstart:
+    short_description: Converge Vault initialization and seal state.
+    options: {}
+  pull:
+    short_description: Pull Vault images into RKE2 containerd.
+    options: {}
+  restart:
+    short_description: Restart Vault workloads explicitly.
+    options: {}
+  uninstall:
+    short_description: Remove Vault release, RBAC, namespace, and data.
+    options: {}
+  verify:
+    short_description: Verify Vault workload readiness.
+    options: {}
+  stage:
+    short_description: Stage Vault-owned static artifacts on the target host.
+    options: {}

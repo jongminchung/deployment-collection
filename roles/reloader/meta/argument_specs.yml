@@ -1,0 +1,14 @@
+---
+argument_specs:
+  bootstrap:
+    short_description: Bootstrap or update Reloader.
+    options: {}
+  restart:
+    short_description: Restart Reloader workloads explicitly.
+    options: {}
+  uninstall:
+    short_description: Remove Reloader.
+    options: {}
+  verify:
+    short_description: Verify Reloader workload readiness.
+    options: {}

@@ -1,0 +1,35 @@
+---
+- name:
+    Skip restart of {{ dev_infra_deployment_restart_kind }}/{{ dev_infra_deployment_restart_name }} in check
+    mode
+  ansible.builtin.debug:
+    msg:
+      "Skipping restart of {{ dev_infra_deployment_restart_kind }}/{{ dev_infra_deployment_restart_name }}
+      because check mode must not roll workloads."
+  when: ansible_check_mode
+
+- name:
+    Resolve restart timestamp for {{ dev_infra_deployment_restart_kind }}/{{ dev_infra_deployment_restart_name
+    }}
+  ansible.builtin.set_fact:
+    dev_infra_deployment_restart_timestamp:
+      "{{ lookup('ansible.builtin.pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}"
+  when: not ansible_check_mode
+
+- name: Restart {{ dev_infra_deployment_restart_kind }}/{{ dev_infra_deployment_restart_name }}
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    state: patched
+    api_version: "{{ dev_infra_deployment_restart_api_version | default('apps/v1') }}"
+    kind: "{{ dev_infra_deployment_restart_kind }}"
+    namespace: "{{ dev_infra_deployment_restart_namespace }}"
+    name: "{{ dev_infra_deployment_restart_name }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ dev_infra_deployment_restart_timestamp }}"
+  vars:
+    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
+  when: not ansible_check_mode
