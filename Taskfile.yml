@@ -112,6 +112,10 @@ tasks:
           echo "Workload Job definitions must be materialized before crossing helper role boundaries." >&2
           exit 1
         fi
+        if rg -n 'external_tls_certificate_[a-z_]+: "\{\{ item\.' playbooks; then
+          echo "External TLS role inputs must use a dedicated outer loop variable." >&2
+          exit 1
+        fi
         test -f roles/workload_bootstrap/tasks/resolve_jobs.yml
         for task_file in apply resolve_jobs trust; do
           occurrence_count="$(rg -c "import_tasks: ${task_file}\\.yml" \

@@ -38,17 +38,18 @@
             name: dev_infra.deployment.external_tls_certificate
             tasks_from: uninstall_preflight
           vars:
-            external_tls_certificate_label: "{{ item.label }}"
-            external_tls_certificate_request_tags: "{{ item.tags }}"
-            external_tls_certificate_namespace: "{{ item.namespace }}"
-            external_tls_certificate_name: "{{ item.name }}"
-            external_tls_certificate_secret_name: "{{ item.secret_name }}"
-            external_tls_certificate_issuer_name: "{{ item.issuer_name }}"
-            external_tls_certificate_dns_records: "{{ item.dns_records }}"
-            external_tls_certificate_dns_names: "{{ item.dns_names }}"
+            external_tls_certificate_label: "{{ external_tls_certificate_item.label }}"
+            external_tls_certificate_request_tags: "{{ external_tls_certificate_item.tags }}"
+            external_tls_certificate_namespace: "{{ external_tls_certificate_item.namespace }}"
+            external_tls_certificate_name: "{{ external_tls_certificate_item.name }}"
+            external_tls_certificate_secret_name: "{{ external_tls_certificate_item.secret_name }}"
+            external_tls_certificate_issuer_name: "{{ external_tls_certificate_item.issuer_name }}"
+            external_tls_certificate_dns_records: "{{ external_tls_certificate_item.dns_records }}"
+            external_tls_certificate_dns_names: "{{ external_tls_certificate_item.dns_names }}"
           loop: "{{ deployment_external_tls_certificates }}"
           loop_control:
-            label: "{{ item.name }}"
+            label: "{{ external_tls_certificate_item.name }}"
+            loop_var: external_tls_certificate_item
           tags: [external_tls_certificate, tls]
 
         - name: Validate APISIX and Gateway API ownership
@@ -86,17 +87,18 @@
             name: dev_infra.deployment.external_tls_certificate
             tasks_from: uninstall
           vars:
-            external_tls_certificate_label: "{{ item.label }}"
-            external_tls_certificate_request_tags: "{{ item.tags }}"
-            external_tls_certificate_namespace: "{{ item.namespace }}"
-            external_tls_certificate_name: "{{ item.name }}"
-            external_tls_certificate_secret_name: "{{ item.secret_name }}"
-            external_tls_certificate_issuer_name: "{{ item.issuer_name }}"
-            external_tls_certificate_dns_records: "{{ item.dns_records }}"
-            external_tls_certificate_dns_names: "{{ item.dns_names }}"
+            external_tls_certificate_label: "{{ external_tls_certificate_item.label }}"
+            external_tls_certificate_request_tags: "{{ external_tls_certificate_item.tags }}"
+            external_tls_certificate_namespace: "{{ external_tls_certificate_item.namespace }}"
+            external_tls_certificate_name: "{{ external_tls_certificate_item.name }}"
+            external_tls_certificate_secret_name: "{{ external_tls_certificate_item.secret_name }}"
+            external_tls_certificate_issuer_name: "{{ external_tls_certificate_item.issuer_name }}"
+            external_tls_certificate_dns_records: "{{ external_tls_certificate_item.dns_records }}"
+            external_tls_certificate_dns_names: "{{ external_tls_certificate_item.dns_names }}"
           loop: "{{ deployment_external_tls_certificates }}"
           loop_control:
-            label: "{{ item.name }}"
+            label: "{{ external_tls_certificate_item.name }}"
+            loop_var: external_tls_certificate_item
           tags: [external_tls_certificate, tls]
 
         - name: Uninstall Reloader
