@@ -1,4 +1,0 @@
----
-dev_infra_deployment_ldap_artifacts_root: "{{ dev_infra_deployment_artifacts_root }}/ldap"
-dev_infra_deployment_ldap_field_manager: ldap-manifest
-dev_infra_deployment_ldap_manifest: "{{ dev_infra_deployment_ldap_artifacts_root }}/manifest.yaml"

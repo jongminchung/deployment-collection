@@ -4,14 +4,13 @@ name: deployment
 version: "0.0.1"
 readme: README.md
 authors:
-  - dev-infra maintainers
+  - Jongmin Chung
 description: Kubernetes platform and application workload deployment operations.
 license:
   - MIT
 tags:
-  - infrastructure
   - kubernetes
-  - devops
+  - helm
 dependencies:
   ansible.posix: ">=1.5.0"
   kubernetes.core: ">=6.4.0"
