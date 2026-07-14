@@ -120,6 +120,15 @@ tasks:
           echo "APISIX uninstall must build deletion identities without configure-only template state." >&2
           exit 1
         fi
+        for role_task in \
+          roles/etcd/tasks/uninstall.yml \
+          roles/opensearch/tasks/uninstall.yml \
+          roles/opensearch_dashboard/tasks/uninstall.yml; do
+          if ! rg -n "item.kind != 'Certificate'" "$role_task"; then
+            echo "$role_task must skip stale Certificate deletion after the cert-manager CRD is gone." >&2
+            exit 1
+          fi
+        done
         test -f roles/workload_bootstrap/tasks/resolve_jobs.yml
         for task_file in apply resolve_jobs trust; do
           occurrence_count="$(rg -c "import_tasks: ${task_file}\\.yml" \

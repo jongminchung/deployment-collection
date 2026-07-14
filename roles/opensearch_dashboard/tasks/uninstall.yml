@@ -10,6 +10,17 @@
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
   changed_when: false
 
+- name: Check cert-manager Certificate CRD before Dashboard cleanup
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+    api_version: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    name: certificates.cert-manager.io
+  register: dev_infra_deployment_dashboard_certificate_crd
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  changed_when: false
+
 - name: Resolve Dashboard definitions for deletion
   ansible.builtin.set_fact:
     dev_infra_deployment_dashboard_delete_local_definitions: >-
@@ -86,5 +97,8 @@
     name: "{{ item.name }}"
     state: absent
   loop: "{{ dev_infra_deployment_dashboard_stale_tls_resources }}"
+  when:
+    - item.kind != 'Certificate' or
+      dev_infra_deployment_dashboard_certificate_crd.resources | length > 0
   vars:
     ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"

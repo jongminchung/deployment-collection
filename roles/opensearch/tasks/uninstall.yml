@@ -120,6 +120,9 @@
     name: "{{ item.name }}"
     state: absent
   loop: "{{ dev_infra_deployment_opensearch_stale_tls_resources }}"
+  when:
+    - item.kind != 'Certificate' or
+      dev_infra_deployment_certificate_crd.resources | length > 0
   vars:
     ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
 
