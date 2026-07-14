@@ -2,6 +2,9 @@
 - name: Apply workload bootstrap manifests
   ansible.builtin.import_tasks: apply.yml
 
+- name: Resolve workload bootstrap Job definitions
+  ansible.builtin.import_tasks: resolve_jobs.yml
+
 - name: Converge root TLS trust bundle
   ansible.builtin.import_tasks: trust.yml
 
@@ -11,11 +14,7 @@
     tasks_from: run_job
   vars:
     dev_infra_deployment_job_name: tls-workload-trust-patch
-    dev_infra_deployment_job_definition: >-
-      {{
-        lookup('ansible.builtin.file', role_path ~
-        '/files/k8s/jobs/tls-workload-trust-patch-job.yaml') | from_yaml
-      }}
+    dev_infra_deployment_job_definition: "{{ workload_bootstrap_tls_workload_trust_patch_job_definition }}"
     dev_infra_deployment_job_namespace: "{{ dev_infra_deployment_namespace }}"
     dev_infra_deployment_job_timeout_seconds: "{{ dev_infra_deployment_wait_timeout_seconds }}"
 
@@ -47,11 +46,7 @@
     tasks_from: run_job
   vars:
     dev_infra_deployment_job_name: tls-root-ca-converge-renew
-    dev_infra_deployment_job_definition: >-
-      {{
-        lookup('ansible.builtin.file', role_path ~
-        '/files/k8s/jobs/tls-root-ca-converge-renew-job.yaml') | from_yaml
-      }}
+    dev_infra_deployment_job_definition: "{{ workload_bootstrap_tls_root_ca_converge_renew_job_definition }}"
     dev_infra_deployment_job_namespace: "{{ dev_infra_deployment_namespace }}"
     dev_infra_deployment_job_timeout_seconds: 2400
 

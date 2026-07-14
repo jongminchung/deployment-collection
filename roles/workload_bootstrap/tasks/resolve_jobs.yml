@@ -1,0 +1,18 @@
+---
+- name: Materialize workload bootstrap Job definitions
+  ansible.builtin.set_fact:
+    workload_bootstrap_tls_root_ca_converge_trust_job_definition: >-
+      {{
+        lookup('ansible.builtin.file', role_path ~
+        '/files/k8s/jobs/tls-root-ca-converge-trust-job.yaml') | from_yaml
+      }}
+    workload_bootstrap_tls_workload_trust_patch_job_definition: >-
+      {{
+        lookup('ansible.builtin.file', role_path ~
+        '/files/k8s/jobs/tls-workload-trust-patch-job.yaml') | from_yaml
+      }}
+    workload_bootstrap_tls_root_ca_converge_renew_job_definition: >-
+      {{
+        lookup('ansible.builtin.file', role_path ~
+        '/files/k8s/jobs/tls-root-ca-converge-renew-job.yaml') | from_yaml
+      }}

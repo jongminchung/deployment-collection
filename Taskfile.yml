@@ -106,7 +106,14 @@ tasks:
           echo "Workload configure must own apply and trust without a pass-through bootstrap." >&2
           exit 1
         fi
-        for task_file in apply trust; do
+        if rg -n 'role_path' \
+          roles/workload_bootstrap/tasks/configure.yml \
+          roles/workload_bootstrap/tasks/trust.yml; then
+          echo "Workload Job definitions must be materialized before crossing helper role boundaries." >&2
+          exit 1
+        fi
+        test -f roles/workload_bootstrap/tasks/resolve_jobs.yml
+        for task_file in apply resolve_jobs trust; do
           occurrence_count="$(rg -c "import_tasks: ${task_file}\\.yml" \
             roles/workload_bootstrap/tasks/configure.yml || true)"
           if [ "$occurrence_count" -ne 1 ]; then
