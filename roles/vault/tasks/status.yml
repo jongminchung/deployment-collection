@@ -1,0 +1,55 @@
+---
+- name: Skip Vault runtime status in check mode
+  ansible.builtin.debug:
+    msg: Skipping Vault runtime status and seal checks in check mode.
+  when: ansible_check_mode
+
+- name: Read Vault runtime status from the Ansible control node
+  block:
+    - name: Wait for Vault Pod to be Running
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        api_version: v1
+        kind: Pod
+        namespace: "{{ dev_infra_deployment_vault_namespace }}"
+        name: "{{ dev_infra_deployment_vault_pod_name }}"
+      register: dev_infra_deployment_vault_pod
+      until:
+        - dev_infra_deployment_vault_pod.resources | length == 1
+        - dev_infra_deployment_vault_pod.resources[0].status.phase | default('') == 'Running'
+      retries: >-
+        {{
+          (dev_infra_deployment_vault_timeout_seconds /
+           dev_infra_deployment_pod_wait_sleep_seconds) | round(0, 'ceil') | int
+        }}
+      delay: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
+      changed_when: false
+
+    - name: Read Vault initialization and seal status
+      kubernetes.core.k8s_exec:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        namespace: "{{ dev_infra_deployment_vault_namespace }}"
+        pod: "{{ dev_infra_deployment_vault_pod_name }}"
+        command: "sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; vault status -format=json || true'"
+      register: dev_infra_deployment_vault_status_result
+      until:
+        - dev_infra_deployment_vault_status_result.stdout is search('"initialized"')
+        - dev_infra_deployment_vault_status_result.stdout is search('"sealed"')
+      retries: >-
+        {{
+          (dev_infra_deployment_vault_timeout_seconds /
+           dev_infra_deployment_pod_wait_sleep_seconds) | round(0, 'ceil') | int
+        }}
+      delay: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
+      changed_when: false
+
+    - name: Resolve Vault status fact
+      ansible.builtin.set_fact:
+        dev_infra_deployment_vault_status:
+          "{{ dev_infra_deployment_vault_status_result.stdout | from_json }}"
+  when: not ansible_check_mode
+  delegate_to: localhost
+  become: false
+  run_once: true
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"

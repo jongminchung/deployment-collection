@@ -1,17 +1,21 @@
 ---
-- name: Stage Vault artifacts
-  ansible.builtin.import_tasks: stage.yml
+- name: Resolve Vault RBAC definitions for deletion
+  ansible.builtin.set_fact:
+    dev_infra_deployment_vault_delete_rbac_definitions: >-
+      {{ lookup('ansible.builtin.file', role_path ~ '/files/k8s/manifests/2-rbac.yaml')
+         | from_yaml_all | reject('equalto', none) | list }}
 
 - name: Delete Vault RBAC manifests
   ansible.builtin.include_role:
     name: dev_infra.deployment.k8s_deployment
     tasks_from: delete_manifest
   vars:
-    dev_infra_deployment_delete_path: "{{ dev_infra_deployment_vault_rbac_manifest }}"
+    dev_infra_deployment_delete_definitions:
+      "{{ dev_infra_deployment_vault_delete_rbac_definitions }}"
 
 - name: Delete Vault HelmChart
   kubernetes.core.k8s:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
     state: absent
     api_version: helm.cattle.io/v1
     kind: HelmChart
@@ -46,7 +50,7 @@
 
 - name: Delete Vault namespace and data
   kubernetes.core.k8s:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
     state: absent
     api_version: v1
     kind: Namespace

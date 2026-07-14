@@ -1,6 +1,11 @@
 ---
-- name: Stage Vault artifacts
-  ansible.builtin.import_tasks: stage.yml
+- name: Resolve Vault Helm values and RBAC definitions
+  ansible.builtin.set_fact:
+    dev_infra_deployment_vault_values_content: >-
+      {{ lookup('ansible.builtin.file', role_path ~ '/files/k8s/values.yaml') }}
+    dev_infra_deployment_vault_rbac_definitions: >-
+      {{ lookup('ansible.builtin.file', role_path ~ '/files/k8s/manifests/2-rbac.yaml')
+         | from_yaml_all | reject('equalto', none) | list }}
 
 - name: Ensure Vault namespace exists
   ansible.builtin.include_role:
@@ -9,17 +14,12 @@
   vars:
     dev_infra_deployment_target_namespace: "{{ dev_infra_deployment_vault_namespace }}"
 
-- name: Read Vault Helm values
-  ansible.builtin.slurp:
-    src: "{{ dev_infra_deployment_vault_values_files[0] }}"
-  register: dev_infra_deployment_vault_values_slurp
-  check_mode: false
-
 - name: Install or upgrade Vault HelmChart
-  kubernetes.core.k8s:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
-    state: present
-    definition:
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: apply_manifest
+  vars:
+    dev_infra_deployment_apply_definitions:
       apiVersion: helm.cattle.io/v1
       kind: HelmChart
       metadata:
@@ -33,19 +33,33 @@
         createNamespace: true
         failurePolicy: "{{ dev_infra_deployment_vault_helmchart_failure_policy }}"
         timeout: "{{ dev_infra_deployment_vault_timeout }}"
-        valuesContent: "{{ dev_infra_deployment_vault_values_slurp.content | b64decode }}"
-  vars:
-    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
-  when: not ansible_check_mode
+        valuesContent: "{{ dev_infra_deployment_vault_values_content }}"
+    dev_infra_deployment_apply_server_side: false
 
-- name: Converge Vault seal state
-  ansible.builtin.import_tasks: kickstart.yml
-  when: not ansible_check_mode
+- name: Read Vault initialization and seal state
+  ansible.builtin.import_tasks: status.yml
+
+- name: Require manual Vault initialization
+  ansible.builtin.fail:
+    msg: >-
+      Vault was deployed but is not initialized. Run vault operator init in a protected operator
+      session, encrypt the generated root token and unseal key with ansible-vault encrypt_string,
+      update the inline inventory values, and rerun deployment:kickstart. Do not save plaintext
+      credentials in the repository, logs, or shell history.
+  when:
+    - not ansible_check_mode
+    - not (dev_infra_deployment_vault_status.initialized | bool)
+
+- name: Converge initialized Vault seal state
+  ansible.builtin.import_tasks: unseal.yml
+  when:
+    - not ansible_check_mode
+    - dev_infra_deployment_vault_status.initialized | bool
 
 - name: Apply Vault auth RBAC
   ansible.builtin.include_role:
     name: dev_infra.deployment.k8s_deployment
     tasks_from: apply_manifest
   vars:
-    dev_infra_deployment_apply_path: "{{ dev_infra_deployment_vault_rbac_manifest }}"
+    dev_infra_deployment_apply_definitions: "{{ dev_infra_deployment_vault_rbac_definitions }}"
     dev_infra_deployment_apply_server_side: false

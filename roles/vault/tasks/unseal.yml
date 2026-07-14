@@ -1,0 +1,27 @@
+---
+- name: Validate Vault unseal key
+  ansible.builtin.assert:
+    that:
+      - vault_unseal_key | string | length > 0
+    fail_msg: Set vault_unseal_key as an encrypted inline inventory value.
+  no_log: true
+  when: dev_infra_deployment_vault_status.sealed | bool
+
+- name: Unseal Vault from the Ansible control node
+  kubernetes.core.k8s_exec:
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+    namespace: "{{ dev_infra_deployment_vault_namespace }}"
+    pod: "{{ dev_infra_deployment_vault_pod_name }}"
+    command: "sh -c {{ dev_infra_deployment_vault_unseal_script | quote }}"
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    dev_infra_deployment_vault_unseal_script: |
+      set -euo pipefail
+      export VAULT_ADDR=http://127.0.0.1:8200
+      vault operator unseal {{ vault_unseal_key | quote }} >/dev/null
+  changed_when: true
+  no_log: true
+  when: dev_infra_deployment_vault_status.sealed | bool
+  delegate_to: localhost
+  become: false
+  run_once: true

@@ -1,7 +1,7 @@
 ---
 - name: Verify {{ dev_infra_deployment_vault_pod_name }} is Ready
   kubernetes.core.k8s_info:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
     api_version: v1
     kind: Pod
     namespace: "{{ dev_infra_deployment_vault_namespace }}"
@@ -18,7 +18,7 @@
 
 - name: Read Vault initialized and seal status
   kubernetes.core.k8s_exec:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
     namespace: "{{ dev_infra_deployment_vault_namespace }}"
     pod: "{{ dev_infra_deployment_vault_pod_name }}"
     command: "sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; vault status -format=json'"

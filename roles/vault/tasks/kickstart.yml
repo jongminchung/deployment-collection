@@ -7,132 +7,29 @@
     fail_msg: Set vault_initial_root_token and vault_unseal_key as encrypted inline inventory values.
   no_log: true
 
-- name: Wait for {{ dev_infra_deployment_vault_pod_name }} to be Running
-  kubernetes.core.k8s_info:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
-    api_version: v1
-    kind: Pod
-    namespace: "{{ dev_infra_deployment_vault_namespace }}"
-    name: "{{ dev_infra_deployment_vault_pod_name }}"
-  register: dev_infra_deployment_vault_pod
-  until:
-    - dev_infra_deployment_vault_pod.resources | length == 1
-    - dev_infra_deployment_vault_pod.resources[0].status.phase | default('') == 'Running'
-  retries:
-    "{{ (dev_infra_deployment_vault_timeout_seconds / dev_infra_deployment_pod_wait_sleep_seconds) | round(0,
-    'ceil') | int }}"
-  delay: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
-  vars:
-    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
-  changed_when: false
-  check_mode: false
-
-- name: Read Vault initialization and seal status
-  kubernetes.core.k8s_exec:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
-    namespace: "{{ dev_infra_deployment_vault_namespace }}"
-    pod: "{{ dev_infra_deployment_vault_pod_name }}"
-    command: "sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; vault status -format=json || true'"
-  register: dev_infra_deployment_vault_status_result
-  until:
-    - dev_infra_deployment_vault_status_result.stdout is search('"initialized"')
-    - dev_infra_deployment_vault_status_result.stdout is search('"sealed"')
-  retries:
-    "{{ (dev_infra_deployment_vault_timeout_seconds / dev_infra_deployment_pod_wait_sleep_seconds) | round(0,
-    'ceil') | int }}"
-  delay: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
-  vars:
-    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
-  changed_when: false
-  check_mode: false
-
-- name: Resolve Vault status fact
-  ansible.builtin.set_fact:
-    dev_infra_deployment_vault_status: "{{ dev_infra_deployment_vault_status_result.stdout | from_json }}"
+- name: Read Vault initialization and seal state
+  ansible.builtin.import_tasks: status.yml
 
 - name: Require manual Vault initialization
-  ansible.builtin.assert:
-    that:
-      - dev_infra_deployment_vault_status.initialized | bool
-    fail_msg: >-
-      Vault is not initialized. Initialize it manually, then update the encrypted inline
-      vault_initial_root_token and vault_unseal_key inventory values.
-  when: not ansible_check_mode
-
-- name: Resolve Vault unseal requirement
-  ansible.builtin.set_fact:
-    dev_infra_deployment_vault_needs_unseal: "{{ dev_infra_deployment_vault_status.sealed | bool }}"
-
-- name: Require Vault unseal key for sealed Vault
-  ansible.builtin.assert:
-    that:
-      - vault_unseal_key | string | length > 0
-    fail_msg: Vault is sealed; set the encrypted inline vault_unseal_key inventory value.
-  no_log: true
+  ansible.builtin.fail:
+    msg: >-
+      Vault is not initialized. Run vault operator init in a protected operator session, encrypt
+      the generated credentials as inline Ansible Vault values, and rerun deployment:kickstart.
   when:
     - not ansible_check_mode
-    - dev_infra_deployment_vault_needs_unseal | bool
+    - not (dev_infra_deployment_vault_status.initialized | bool)
 
-- name: Unseal Vault
-  kubernetes.core.k8s_exec:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
-    namespace: "{{ dev_infra_deployment_vault_namespace }}"
-    pod: "{{ dev_infra_deployment_vault_pod_name }}"
-    command: "sh -c {{ dev_infra_deployment_vault_unseal_script | quote }}"
-  vars:
-    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
-    dev_infra_deployment_vault_unseal_script: |
-      set -euo pipefail
-      export VAULT_ADDR=http://127.0.0.1:8200
-      vault operator unseal {{ vault_unseal_key | quote }} >/dev/null
-  changed_when: true
-  no_log: true
+- name: Converge initialized Vault seal state
+  ansible.builtin.import_tasks: unseal.yml
   when:
     - not ansible_check_mode
-    - dev_infra_deployment_vault_needs_unseal | bool
+    - dev_infra_deployment_vault_status.initialized | bool
 
-- name: Read Vault status after bootstrap
-  kubernetes.core.k8s_exec:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
-    namespace: "{{ dev_infra_deployment_vault_namespace }}"
-    pod: "{{ dev_infra_deployment_vault_pod_name }}"
-    command: "sh -c 'export VAULT_ADDR=http://127.0.0.1:8200; vault status -format=json'"
-  register: dev_infra_deployment_vault_verify_status_result
-  vars:
-    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
-  changed_when: false
-  check_mode: false
-  when: not ansible_check_mode
-
-- name: Verify Vault is initialized and unsealed
-  ansible.builtin.assert:
-    that:
-      - dev_infra_deployment_vault_verify_status.initialized | bool
-      - not (dev_infra_deployment_vault_verify_status.sealed | bool)
-  vars:
-    dev_infra_deployment_vault_verify_status:
-      "{{ dev_infra_deployment_vault_verify_status_result.stdout | from_json }}"
-  when: not ansible_check_mode
-
-- name: Wait for {{ dev_infra_deployment_vault_pod_name }} readiness after bootstrap
-  kubernetes.core.k8s_info:
-    kubeconfig: "{{ dev_infra_deployment_kubeconfig }}"
-    api_version: v1
-    kind: Pod
-    namespace: "{{ dev_infra_deployment_vault_namespace }}"
-    name: "{{ dev_infra_deployment_vault_pod_name }}"
-    wait: true
-    wait_condition:
-      type: Ready
-      status: "True"
-    wait_sleep: "{{ dev_infra_deployment_pod_wait_sleep_seconds }}"
-    wait_timeout: "{{ dev_infra_deployment_vault_timeout_seconds }}"
-  vars:
-    ansible_python_interpreter: "{{ dev_infra_deployment_python_interpreter }}"
-  changed_when: false
-  check_mode: false
+- name: Verify Vault after kickstart
+  ansible.builtin.import_tasks: verify.yml
   when: not ansible_check_mode
 
 - name: Mark Vault bootstrap complete
   ansible.builtin.set_fact:
     dev_infra_deployment_vault_bootstrap_completed: true
+  when: not ansible_check_mode
