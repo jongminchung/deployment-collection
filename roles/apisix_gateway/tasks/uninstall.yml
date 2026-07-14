@@ -12,9 +12,16 @@
 
 - name: Resolve APISIX Gateway API definitions for deletion
   ansible.builtin.set_fact:
-    apisix_gateway_delete_definitions: >-
-      {{ lookup('ansible.builtin.template', role_path ~ '/templates/gateway-api.yaml.j2')
-         | from_yaml_all | reject('equalto', none) | reverse | list }}
+    apisix_gateway_delete_definitions:
+      - apiVersion: gateway.networking.k8s.io/v1
+        kind: Gateway
+        metadata:
+          name: "{{ apisix_gateway_name }}"
+          namespace: "{{ apisix_namespace }}"
+      - apiVersion: gateway.networking.k8s.io/v1
+        kind: GatewayClass
+        metadata:
+          name: "{{ apisix_gateway_class_name }}"
   when: apisix_gateway_api_crd_info.resources | length > 0
 
 - name: Delete APISIX Gateway API resources

@@ -116,6 +116,10 @@ tasks:
           echo "External TLS role inputs must use a dedicated outer loop variable." >&2
           exit 1
         fi
+        if rg -n 'gateway-api\.yaml\.j2' roles/apisix_gateway/tasks/uninstall.yml; then
+          echo "APISIX uninstall must build deletion identities without configure-only template state." >&2
+          exit 1
+        fi
         test -f roles/workload_bootstrap/tasks/resolve_jobs.yml
         for task_file in apply resolve_jobs trust; do
           occurrence_count="$(rg -c "import_tasks: ${task_file}\\.yml" \
