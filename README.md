@@ -15,15 +15,47 @@ scalar와 인벤토리는 소비 저장소가 inline Ansible Vault 변수로 제
 whole-file Vault 경로로 전달할 수 있습니다. 공식 Interface는 public Playbook이며 Role의 `tasks_from`은
 그 구현에 사용합니다.
 
-`restart`는 local-path, cert-manager, APISIX, ExternalDNS, Reloader, Vault와 애플리케이션 workload를
-함께 재시작합니다. `uninstall`은 실행 자체를 승인으로 간주하며 Collection이 만든 Kubernetes platform,
-workload, namespace, PVC/PV, CRD와 소유가 확인된 Cloudflare DNS record를 모두 제거합니다. RKE2와 host
-설정은 소비 저장소 소유이므로 제거하지 않습니다. `--check`를 명시하면 외부 소유권과 삭제 대상을
-검증하지만 Cloudflare DELETE를 수행하지 않습니다.
+tag 없는 `restart`는 local-path, cert-manager, APISIX, ExternalDNS, Reloader, Vault와
+애플리케이션 workload를 모두 재시작합니다. tag 없는 `uninstall`은 실행 자체를
+승인으로 간주하며 Collection이 만든 Kubernetes platform, workload, namespace, PVC/PV,
+CRD와 소유가 확인된 Cloudflare DNS record를 모두 제거합니다. RKE2와 host 설정은
+소비 저장소 소유이므로 제거하지 않습니다. `--check`를 명시하면 외부 소유권과 삭제
+대상을 검증하지만 Cloudflare DELETE를 수행하지 않습니다.
 
 관리 namespace와 cluster-scoped resource에는 exclusive ownership label을 기록합니다. 기존 설치는 새
 Collection의 `configure`를 한 번 실행해 ownership을 반영한 뒤 `uninstall`해야 합니다. 다른 namespace의
 CR이나 local-path PVC처럼 foreign consumer가 발견되면 전체 제거를 시작하기 전에 중단합니다.
+
+## Tag와 limit
+
+Public Playbook은 Ansible의 `--list-tags`, `--list-tasks`, `--tags`, `--skip-tags`, `--limit`,
+`--check`를 그대로 따릅니다. 필터가 없으면 기존 전체 lifecycle을 실행하고 선택 tag의
+의존 component를 자동 확장하지 않습니다.
+
+```bash
+ansible-playbook -i inventory/hosts.yml dev_infra.deployment.configure --list-tags
+ansible-playbook -i inventory/hosts.yml dev_infra.deployment.configure \
+  --list-tasks --tags opensearch --limit k8s_workload_mgr
+ansible-playbook -i inventory/hosts.yml dev_infra.deployment.configure \
+  --tags etcd,opensearch --limit k8s_workload_mgr
+ansible-playbook -i inventory/hosts.yml dev_infra.deployment.uninstall \
+  --tags opensearch --limit k8s_workload_mgr
+```
+
+Canonical component tag는 `local_path_provisioner`, `cert_manager`, `acme_dns01_issuer`,
+`external_tls_certificate`, `apisix_gateway`, `external_dns`, `reloader`, `vault`,
+`internal_pki_issuer`, `workload_bootstrap`, `etcd`, `opensearch`,
+`opensearch_dashboard`입니다. `storage`, `tls`, `dns`, `pki`, `gateway_api`, `dashboard`는
+여러 component를 선택하는 alias tag입니다. `init`은 `init`, `validate` tag를 제공합니다.
+
+Tag를 준 `uninstall`은 선택 component의 namespace 소유권과 삭제 preflight만 mutation
+전에 수행하고 해당 component만 제거합니다. Tag 없는 전체 uninstall은 모든
+namespace preflight를 먼저 끝낸 뒤 삭제를 시작합니다. `workload_bootstrap`처럼 namespace를
+소유한 component를 제거하면 그 namespace의 하위 workload도 함께 제거될 수 있습니다.
+
+Control-node playbook은 `--limit`로 선택된 `k8s_workload_mgr` 중 한 host에서
+`run_once`로 실행합니다. `pull`은 선택된 `k8s_workload_nodes`에만 image를
+import합니다.
 
 ## Ansible control node
 

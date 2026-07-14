@@ -7,3 +7,4 @@
       ansible.builtin.import_role:
         name: dev_infra.deployment.k8s_deployment
         tasks_from: init
+      tags: [init, validate]

@@ -10,22 +10,84 @@
         tasks_from: validate_control_node
       tags: [always]
 
-    - name: Validate full uninstall ownership before mutation
+    - name: Validate selected uninstall ownership before mutation
       block:
-        - name: Validate Collection-managed namespace ownership
-          ansible.builtin.import_role:
+        - name: Validate ExternalDNS namespace ownership
+          ansible.builtin.include_role:
             name: dev_infra.deployment.k8s_deployment
             tasks_from: validate_namespaces
+            apply:
+              tags: [external_dns, dns]
           vars:
             dev_infra_deployment_validate_namespaces:
               - "{{ external_dns_namespace | default('external-dns') }}"
+          tags: [external_dns, dns]
+
+        - name: Validate APISIX namespace ownership
+          ansible.builtin.include_role:
+            name: dev_infra.deployment.k8s_deployment
+            tasks_from: validate_namespaces
+            apply:
+              tags: [external_tls_certificate, tls, apisix_gateway, gateway_api]
+          vars:
+            dev_infra_deployment_validate_namespaces:
               - "{{ apisix_namespace | default('apisix') }}"
+          tags: [external_tls_certificate, tls, apisix_gateway, gateway_api]
+
+        - name: Validate Reloader namespace ownership
+          ansible.builtin.include_role:
+            name: dev_infra.deployment.k8s_deployment
+            tasks_from: validate_namespaces
+            apply:
+              tags: [reloader]
+          vars:
+            dev_infra_deployment_validate_namespaces:
               - "{{ dev_infra_deployment_reloader_namespace | default('reloader') }}"
+          tags: [reloader]
+
+        - name: Validate application namespace ownership
+          ansible.builtin.include_role:
+            name: dev_infra.deployment.k8s_deployment
+            tasks_from: validate_namespaces
+            apply:
+              tags: [workload_bootstrap, pki, etcd, opensearch, opensearch_dashboard, dashboard]
+          vars:
+            dev_infra_deployment_validate_namespaces:
               - "{{ dev_infra_deployment_namespace | default('gabiacloud-s3') }}"
+          tags: [workload_bootstrap, pki, etcd, opensearch, opensearch_dashboard, dashboard]
+
+        - name: Validate Vault namespace ownership
+          ansible.builtin.include_role:
+            name: dev_infra.deployment.k8s_deployment
+            tasks_from: validate_namespaces
+            apply:
+              tags: [vault]
+          vars:
+            dev_infra_deployment_validate_namespaces:
               - "{{ dev_infra_deployment_vault_namespace | default('vault') }}"
+          tags: [vault]
+
+        - name: Validate cert-manager namespace ownership
+          ansible.builtin.include_role:
+            name: dev_infra.deployment.k8s_deployment
+            tasks_from: validate_namespaces
+            apply:
+              tags: [internal_pki_issuer, pki, acme_dns01_issuer, tls, cert_manager]
+          vars:
+            dev_infra_deployment_validate_namespaces:
               - "{{ cert_manager_namespace | default('cert-manager') }}"
+          tags: [internal_pki_issuer, pki, acme_dns01_issuer, tls, cert_manager]
+
+        - name: Validate local-path namespace ownership
+          ansible.builtin.include_role:
+            name: dev_infra.deployment.k8s_deployment
+            tasks_from: validate_namespaces
+            apply:
+              tags: [local_path_provisioner, storage]
+          vars:
+            dev_infra_deployment_validate_namespaces:
               - "{{ local_path_provisioner_namespace | default('local-path-storage') }}"
-          tags: [always]
+          tags: [local_path_provisioner, storage]
 
         - name: Validate ExternalDNS ownership
           ansible.builtin.import_role:

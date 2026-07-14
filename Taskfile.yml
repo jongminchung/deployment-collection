@@ -148,6 +148,20 @@ tasks:
           echo "Public Collection lifecycle Modules must not invoke one another." >&2
           exit 1
         fi
+        if ! rg -n '^[[:space:]]*tags: \[init, validate\]$' playbooks/init.yml; then
+          echo "Public init must expose init and validate tags." >&2
+          exit 1
+        fi
+        if rg -n 'Validate Collection-managed namespace ownership' playbooks/uninstall.yml; then
+          echo "Uninstall namespace ownership preflight must be scoped by component tags." >&2
+          exit 1
+        fi
+        for namespace_label in ExternalDNS APISIX Reloader application Vault cert-manager local-path; do
+          if ! rg -n "Validate ${namespace_label} namespace ownership" playbooks/uninstall.yml; then
+            echo "Missing tagged namespace ownership preflight: $namespace_label" >&2
+            exit 1
+          fi
+        done
         if rg -n 'import_playbook: .*configure|internal_pki_issuer' playbooks/kickstart.yml; then
           echo "Kickstart must not invoke configure-owned convergence." >&2
           exit 1
@@ -175,6 +189,126 @@ tasks:
               --syntax-check \
               "{{.COLLECTION_FQCN}}.$playbook"
         done
+
+        list_tags() {
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              "{{.COLLECTION_FQCN}}.$1" \
+              --list-tags \
+            | sed -n 's/.*TASK TAGS: \[\(.*\)\]/\1/p' \
+            | tr ',' '\n' \
+            | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+        }
+
+        assert_tags() {
+          playbook="$1"
+          shift
+          available_tags="$(list_tags "$playbook")"
+          for expected_tag in "$@"; do
+            if ! printf '%s\n' "$available_tags" | grep -qx "$expected_tag"; then
+              echo "$playbook does not expose expected tag: $expected_tag" >&2
+              exit 1
+            fi
+          done
+        }
+
+        assert_tags init init validate
+        assert_tags configure \
+          local_path_provisioner cert_manager acme_dns01_issuer \
+          external_tls_certificate apisix_gateway external_dns reloader vault \
+          internal_pki_issuer workload_bootstrap etcd opensearch opensearch_dashboard \
+          storage tls dns pki gateway_api dashboard
+        assert_tags kickstart vault opensearch
+        assert_tags pull vault etcd opensearch opensearch_dashboard
+        assert_tags restart \
+          local_path_provisioner cert_manager apisix_gateway external_dns reloader \
+          vault etcd opensearch opensearch_dashboard \
+          storage tls dns gateway_api dashboard
+        assert_tags uninstall \
+          local_path_provisioner cert_manager acme_dns01_issuer \
+          external_tls_certificate apisix_gateway external_dns reloader vault \
+          internal_pki_issuer workload_bootstrap etcd opensearch opensearch_dashboard \
+          storage tls dns pki gateway_api dashboard
+
+        configure_tasks="$(
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              {{.COLLECTION_FQCN}}.configure \
+              --list-tasks \
+              --tags opensearch \
+              --limit k8s_workload_mgr
+        )"
+        printf '%s\n' "$configure_tasks" | grep -q 'Install or upgrade OpenSearch Helm release'
+        if printf '%s\n' "$configure_tasks" | grep -q 'Install or upgrade etcd Helm release'; then
+          echo "Configure tag filtering selected an unrelated etcd task." >&2
+          exit 1
+        fi
+
+        pull_tasks="$(
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              {{.COLLECTION_FQCN}}.pull \
+              --list-tasks \
+              --tags etcd \
+              --limit k8s-mgr
+        )"
+        printf '%s\n' "$pull_tasks" \
+          | grep -Eq '^[[:space:]]+Pull etcd images[[:space:]]+TAGS:'
+        if printf '%s\n' "$pull_tasks" \
+          | grep -Eq '^[[:space:]]+Pull OpenSearch images[[:space:]]+TAGS:'; then
+          echo "Pull tag filtering selected an unrelated OpenSearch task." >&2
+          exit 1
+        fi
+
+        uninstall_tasks="$(
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              {{.COLLECTION_FQCN}}.uninstall \
+              --list-tasks \
+              --tags opensearch \
+              --limit k8s_workload_mgr
+        )"
+        printf '%s\n' "$uninstall_tasks" | grep -q 'Validate application namespace ownership'
+        printf '%s\n' "$uninstall_tasks" | grep -q 'Delete OpenSearch PVCs'
+        if printf '%s\n' "$uninstall_tasks" | grep -q 'Validate Vault namespace ownership'; then
+          echo "Partial uninstall selected an unrelated Vault namespace preflight." >&2
+          exit 1
+        fi
+        if printf '%s\n' "$uninstall_tasks" | grep -q 'Delete etcd PVCs'; then
+          echo "Partial uninstall selected an unrelated etcd task." >&2
+          exit 1
+        fi
+
+        full_uninstall_tasks="$(
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              {{.COLLECTION_FQCN}}.uninstall \
+              --list-tasks \
+              --limit k8s_workload_mgr
+        )"
+        for namespace_label in ExternalDNS APISIX Reloader application Vault cert-manager local-path; do
+          printf '%s\n' "$full_uninstall_tasks" \
+            | grep -q "Validate ${namespace_label} namespace ownership"
+        done
+        last_preflight_line="$(
+          printf '%s\n' "$full_uninstall_tasks" \
+            | grep -n 'Verify local-path storage is used only by Collection-owned namespaces' \
+            | cut -d: -f1
+        )"
+        first_mutation_line="$(
+          printf '%s\n' "$full_uninstall_tasks" \
+            | grep -n 'Stop ExternalDNS before deleting owned records' \
+            | cut -d: -f1
+        )"
+        if [ "$last_preflight_line" -ge "$first_mutation_line" ]; then
+          echo "Full uninstall must finish every preflight before the first mutation." >&2
+          exit 1
+        fi
 
   release:status:
     desc: Show the main and 0.0.1 local and remote commit SHAs.
