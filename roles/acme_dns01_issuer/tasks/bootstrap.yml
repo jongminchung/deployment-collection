@@ -84,8 +84,13 @@
         name: "{{ acme_dns01_issuer_secret_name }}"
         namespace: "{{ acme_dns01_issuer_namespace }}"
       type: Opaque
-      stringData:
-        "{{ acme_dns01_issuer_secret_key }}": "{{ acme_dns01_issuer_cloudflare_api_token }}"
+      stringData: >-
+        {{
+          dict([[
+            acme_dns01_issuer_secret_key,
+            acme_dns01_issuer_cloudflare_api_token
+          ]])
+        }}
     dev_infra_deployment_apply_server_side: false
     dev_infra_deployment_apply_no_log: true
   no_log: true

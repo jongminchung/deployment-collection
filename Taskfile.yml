@@ -84,6 +84,10 @@ tasks:
           echo "Managed-node deployment tooling variables are not allowed." >&2
           exit 1
         fi
+        if rg -n '^[[:space:]]*"\{\{[^"}]+\}\}":[[:space:]]' roles playbooks; then
+          echo "Jinja expressions in YAML mapping keys are not rendered; build a computed mapping instead." >&2
+          exit 1
+        fi
         if rg -n 'import_tasks: kickstart.yml' roles/vault/tasks/configure.yml; then
           echo "Vault configure must not invoke kickstart." >&2
           exit 1
