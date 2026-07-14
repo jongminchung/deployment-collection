@@ -27,6 +27,14 @@
       {% endfor %}
   register: dev_infra_deployment_image_import_file
 
+- name: Trigger RKE2 image import for the requested image list
+  ansible.builtin.file:
+    path: "{{ dev_infra_deployment_rke2_images_dir }}/{{ dev_infra_deployment_image_file_name }}"
+    state: touch
+    access_time: preserve
+    modification_time: now
+  when: not ansible_check_mode
+
 - name: Wait for requested images in RKE2 containerd
   ansible.builtin.command:
     argv:
