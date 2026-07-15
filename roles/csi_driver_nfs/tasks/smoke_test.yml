@@ -28,7 +28,8 @@
         | selectattr('spec.claimRef.name', 'defined')
         | selectattr('spec.claimRef.name', 'equalto', csi_driver_nfs_smoke_pvc_name)
         | list | length == 0
-      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      retries: >-
+        {{ ((csi_driver_nfs_smoke_timeout_seconds | int) / 5) | round(0, 'ceil') | int }}
       delay: 5
       changed_when: false
       vars:
@@ -54,7 +55,8 @@
       until: >-
         csi_driver_nfs_first_smoke_pvc.resources | length == 1
         and csi_driver_nfs_first_smoke_pvc.resources[0].status.phase | default('') == 'Bound'
-      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      retries: >-
+        {{ ((csi_driver_nfs_smoke_timeout_seconds | int) / 5) | round(0, 'ceil') | int }}
       delay: 5
       changed_when: false
       vars:
@@ -101,7 +103,8 @@
         name: "{{ csi_driver_nfs_first_smoke_pv_name }}"
       register: csi_driver_nfs_first_smoke_pv
       until: csi_driver_nfs_first_smoke_pv.resources | length == 0
-      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      retries: >-
+        {{ ((csi_driver_nfs_smoke_timeout_seconds | int) / 5) | round(0, 'ceil') | int }}
       delay: 5
       changed_when: false
       vars:
@@ -127,7 +130,8 @@
       until: >-
         csi_driver_nfs_second_smoke_pvc.resources | length == 1
         and csi_driver_nfs_second_smoke_pvc.resources[0].status.phase | default('') == 'Bound'
-      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      retries: >-
+        {{ ((csi_driver_nfs_smoke_timeout_seconds | int) / 5) | round(0, 'ceil') | int }}
       delay: 5
       changed_when: false
       vars:
@@ -175,7 +179,8 @@
         | selectattr('spec.claimRef.name', 'defined')
         | selectattr('spec.claimRef.name', 'equalto', csi_driver_nfs_smoke_pvc_name)
         | list | length == 0
-      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      retries: >-
+        {{ ((csi_driver_nfs_smoke_timeout_seconds | int) / 5) | round(0, 'ceil') | int }}
       delay: 5
       changed_when: false
       vars:
@@ -205,7 +210,7 @@
           app.kubernetes.io/managed-by: dev-infra-deployment
       spec:
         backoffLimit: 0
-        activeDeadlineSeconds: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+        activeDeadlineSeconds: "{{ csi_driver_nfs_smoke_timeout_seconds | int }}"
         template:
           metadata:
             labels:
