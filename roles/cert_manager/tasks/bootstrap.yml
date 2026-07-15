@@ -69,3 +69,4 @@
           app.kubernetes.io/managed-by: dev-infra-deployment
           dev-infra.deployment/ownership: exclusive
   loop: "{{ cert_manager_crd_names }}"
+  when: not ansible_check_mode

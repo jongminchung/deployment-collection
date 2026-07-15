@@ -116,6 +116,9 @@ tasks:
           echo "Internal PKI timeout defaults must not alias helper variables passed back at include boundaries." >&2
           exit 1
         fi
+        rg -q -U \
+          'Mark cert-manager CustomResourceDefinitions as Collection-owned[\s\S]*when: not ansible_check_mode' \
+          roles/cert_manager/tasks/bootstrap.yml
         if rg -n 'import_tasks: kickstart.yml' roles/vault/tasks/configure.yml; then
           echo "Vault configure must not invoke kickstart." >&2
           exit 1
