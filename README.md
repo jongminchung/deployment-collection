@@ -6,7 +6,7 @@ Collection입니다.
 ## 구조
 
 - `k8s_deployment`: Kubernetes/Helm/RKE2 image import 공통 동작
-- 플랫폼 Role: storage, cert-manager, ACME/TLS, PKI, APISIX, ExternalDNS, Reloader
+- 플랫폼 Role: NFS CSI storage, cert-manager, ACME/TLS, PKI, APISIX, ExternalDNS, Reloader
 - 워크로드 Role: Vault, etcd, OpenSearch, OpenSearch Dashboard
 - `playbooks/`: `init`, `configure`, `kickstart`, `pull`, `restart`, `uninstall`
 
@@ -15,7 +15,7 @@ scalar와 인벤토리는 소비 저장소가 inline Ansible Vault 변수로 제
 whole-file Vault 경로로 전달할 수 있습니다. 공식 Interface는 public Playbook이며 Role의 `tasks_from`은
 그 구현에 사용합니다.
 
-tag 없는 `restart`는 local-path, cert-manager, APISIX, ExternalDNS, Reloader, Vault와
+tag 없는 `restart`는 NFS CSI, cert-manager, APISIX, ExternalDNS, Reloader, Vault와
 애플리케이션 workload를 모두 재시작합니다. tag 없는 `uninstall`은 실행 자체를
 승인으로 간주하며 Collection이 만든 Kubernetes platform, workload, namespace, PVC/PV,
 CRD와 소유가 확인된 Cloudflare DNS record를 모두 제거합니다. RKE2와 host 설정은
@@ -24,7 +24,30 @@ CRD와 소유가 확인된 Cloudflare DNS record를 모두 제거합니다. RKE2
 
 관리 namespace와 cluster-scoped resource에는 exclusive ownership label을 기록합니다. 기존 설치는 새
 Collection의 `configure`를 한 번 실행해 ownership을 반영한 뒤 `uninstall`해야 합니다. 다른 namespace의
-CR이나 local-path PVC처럼 foreign consumer가 발견되면 전체 제거를 시작하기 전에 중단합니다.
+CR이나 NFS CSI StorageClass를 사용하는 foreign PVC가 발견되면 전체 제거를 시작하기 전에 중단합니다.
+
+## NFS CSI storage
+
+`csi_driver_nfs`는 공식 `kubernetes-csi/csi-driver-nfs` Helm chart `4.13.2`를 전용
+`nfs-csi` namespace에 설치합니다. NFS server 자체는 관리하지 않으며 소비 인벤토리가 준비된
+server와 export를 전달해야 합니다.
+
+```yaml
+dev_infra_deployment_storage_class: nfs-csi
+csi_driver_nfs_server: 10.25.140.6
+csi_driver_nfs_share: /k8s_data
+csi_driver_nfs_sub_dir: '${pvc.metadata.namespace}/${pvc.metadata.name}'
+csi_driver_nfs_mount_permissions: "0777"
+csi_driver_nfs_mount_options: [nfsvers=4.1, hard]
+csi_driver_nfs_reclaim_policy: Delete
+csi_driver_nfs_on_delete: delete
+csi_driver_nfs_default_class: true
+```
+
+configure는 controller Deployment, node DaemonSet, StorageClass와 CSIDriver 소유권을 검증한 뒤
+non-root smoke Job으로 PVC 쓰기·읽기를 확인합니다. 같은 PVC를 다시 생성해 이전 marker가 남지
+않았는지도 검사하므로 NFS export의 동적 하위 디렉터리 생성 권한과 `Delete` 동작이 모두 필요합니다.
+NFS CSI subdirectory volume은 PVC 요청 용량만으로 server-side quota를 강제하지 않습니다.
 
 ## Tag와 limit
 
@@ -42,7 +65,7 @@ ansible-playbook -i inventory/hosts.yml dev_infra.deployment.uninstall \
   --tags opensearch --limit k8s_workload_mgr
 ```
 
-Canonical component tag는 `local_path_provisioner`, `cert_manager`, `acme_dns01_issuer`,
+Canonical component tag는 `csi_driver_nfs`, `cert_manager`, `acme_dns01_issuer`,
 `external_tls_certificate`, `apisix_gateway`, `external_dns`, `reloader`, `vault`,
 `internal_pki_issuer`, `workload_bootstrap`, `etcd`, `opensearch`,
 `opensearch_dashboard`입니다. `storage`, `tls`, `dns`, `pki`, `gateway_api`, `dashboard`는

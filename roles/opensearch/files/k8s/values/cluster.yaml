@@ -118,7 +118,6 @@ roles:
 opensearchJavaOpts: "-Xms1g -Xmx1g"
 persistence:
   enabled: true
-  storageClass: local-path
   size: 20Gi
 resources:
   requests:

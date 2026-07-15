@@ -47,18 +47,25 @@ tasks:
         test -f roles/k8s_deployment/tasks/delete_namespace.yml
         test -f roles/k8s_deployment/tasks/delete_crds.yml
         test -f roles/k8s_deployment/tasks/wait_storage_reclaim.yml
+        test -z "$(find roles/local_path_provisioner -type f -print -quit 2>/dev/null)"
+        test -f roles/csi_driver_nfs/tasks/smoke_test.yml
+
+        if rg -n 'local[_-]path|local path' roles playbooks README.md; then
+          echo "Local-path storage references are not allowed after the NFS CSI transition." >&2
+          exit 1
+        fi
 
         if rg -n 'dev_infra_deployment_confirm_full_uninstall' roles playbooks README.md; then
           echo "Public uninstall must not require a separate confirmation variable." >&2
           exit 1
         fi
 
-        for role in local_path_provisioner cert_manager acme_dns01_issuer \
+        for role in csi_driver_nfs cert_manager acme_dns01_issuer \
           external_tls_certificate apisix_gateway external_dns reloader vault \
           internal_pki_issuer workload_bootstrap etcd opensearch opensearch_dashboard; do
           test -f "roles/$role/tasks/uninstall.yml"
         done
-        for role in local_path_provisioner cert_manager apisix_gateway external_dns \
+        for role in csi_driver_nfs cert_manager apisix_gateway external_dns \
           reloader vault etcd opensearch opensearch_dashboard; do
           test -f "roles/$role/tasks/restart.yml"
         done
@@ -69,7 +76,7 @@ tasks:
         fi
         if rg -n \
           'k8s_kubectl_bin|/var/lib/rancher/rke2/bin/kubectl|/usr/local/bin/helm|ansible\.builtin\.(apt|pip):' \
-          roles/local_path_provisioner \
+          roles/csi_driver_nfs \
           roles/cert_manager \
           roles/acme_dns01_issuer \
           roles/external_tls_certificate \
@@ -156,17 +163,23 @@ tasks:
           echo "Uninstall namespace ownership preflight must be scoped by component tags." >&2
           exit 1
         fi
-        for namespace_label in ExternalDNS APISIX Reloader application Vault cert-manager local-path; do
+        for namespace_label in ExternalDNS APISIX Reloader application Vault cert-manager; do
           if ! rg -n "Validate ${namespace_label} namespace ownership" playbooks/uninstall.yml; then
             echo "Missing tagged namespace ownership preflight: $namespace_label" >&2
             exit 1
           fi
         done
+        if ! rg -n 'Validate NFS CSI namespace ownership' playbooks/uninstall.yml; then
+          echo "Missing tagged namespace ownership preflight: NFS CSI" >&2
+          exit 1
+        fi
         if rg -n 'import_playbook: .*configure|internal_pki_issuer' playbooks/kickstart.yml; then
           echo "Kickstart must not invoke configure-owned convergence." >&2
           exit 1
         fi
         for role_task in \
+          roles/csi_driver_nfs/tasks/bootstrap.yml \
+          roles/csi_driver_nfs/tasks/restart.yml \
           roles/reloader/tasks/bootstrap.yml \
           roles/reloader/tasks/restart.yml \
           roles/workload_bootstrap/tasks/configure.yml; do
@@ -215,21 +228,35 @@ tasks:
 
         assert_tags init init validate
         assert_tags configure \
-          local_path_provisioner cert_manager acme_dns01_issuer \
+          csi_driver_nfs cert_manager acme_dns01_issuer \
           external_tls_certificate apisix_gateway external_dns reloader vault \
           internal_pki_issuer workload_bootstrap etcd opensearch opensearch_dashboard \
           storage tls dns pki gateway_api dashboard
         assert_tags kickstart vault opensearch
         assert_tags pull vault etcd opensearch opensearch_dashboard
         assert_tags restart \
-          local_path_provisioner cert_manager apisix_gateway external_dns reloader \
+          csi_driver_nfs cert_manager apisix_gateway external_dns reloader \
           vault etcd opensearch opensearch_dashboard \
           storage tls dns gateway_api dashboard
         assert_tags uninstall \
-          local_path_provisioner cert_manager acme_dns01_issuer \
+          csi_driver_nfs cert_manager acme_dns01_issuer \
           external_tls_certificate apisix_gateway external_dns reloader vault \
           internal_pki_issuer workload_bootstrap etcd opensearch opensearch_dashboard \
           storage tls dns pki gateway_api dashboard
+
+        nfs_configure_tasks="$(
+          ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
+            ansible-playbook \
+              -i tests/inventory/hosts.yml \
+              {{.COLLECTION_FQCN}}.configure \
+              --list-tasks \
+              --tags csi_driver_nfs \
+              --limit k8s_workload_mgr
+        )"
+        printf '%s\n' "$nfs_configure_tasks" \
+          | grep -q 'Install or upgrade NFS CSI Helm release'
+        printf '%s\n' "$nfs_configure_tasks" \
+          | grep -q 'Verify NFS CSI deleted the first marker and supports non-root I/O'
 
         configure_tasks="$(
           ANSIBLE_COLLECTIONS_PATH={{.COLLECTIONS_PATH}} \
@@ -291,13 +318,15 @@ tasks:
               --list-tasks \
               --limit k8s_workload_mgr
         )"
-        for namespace_label in ExternalDNS APISIX Reloader application Vault cert-manager local-path; do
+        for namespace_label in ExternalDNS APISIX Reloader application Vault cert-manager; do
           printf '%s\n' "$full_uninstall_tasks" \
             | grep -q "Validate ${namespace_label} namespace ownership"
         done
+        printf '%s\n' "$full_uninstall_tasks" \
+          | grep -q 'Validate NFS CSI namespace ownership'
         last_preflight_line="$(
           printf '%s\n' "$full_uninstall_tasks" \
-            | grep -n 'Verify local-path storage is used only by Collection-owned namespaces' \
+            | grep -n 'Verify NFS storage is used only by Collection-owned namespaces' \
             | cut -d: -f1
         )"
         first_mutation_line="$(

@@ -78,16 +78,16 @@
               - "{{ cert_manager_namespace | default('cert-manager') }}"
           tags: [internal_pki_issuer, pki, acme_dns01_issuer, tls, cert_manager]
 
-        - name: Validate local-path namespace ownership
+        - name: Validate NFS CSI namespace ownership
           ansible.builtin.include_role:
             name: dev_infra.deployment.k8s_deployment
             tasks_from: validate_namespaces
             apply:
-              tags: [local_path_provisioner, storage]
+              tags: [csi_driver_nfs, storage]
           vars:
             dev_infra_deployment_validate_namespaces:
-              - "{{ local_path_provisioner_namespace | default('local-path-storage') }}"
-          tags: [local_path_provisioner, storage]
+              - "{{ csi_driver_nfs_namespace | default('nfs-csi') }}"
+          tags: [csi_driver_nfs, storage]
 
         - name: Validate ExternalDNS ownership
           ansible.builtin.import_role:
@@ -126,11 +126,11 @@
             tasks_from: uninstall_preflight
           tags: [cert_manager, tls]
 
-        - name: Validate local-path storage ownership
+        - name: Validate NFS CSI storage ownership
           ansible.builtin.import_role:
-            name: dev_infra.deployment.local_path_provisioner
+            name: dev_infra.deployment.csi_driver_nfs
             tasks_from: uninstall_preflight
-          tags: [local_path_provisioner, storage]
+          tags: [csi_driver_nfs, storage]
       delegate_to: localhost
       become: false
       run_once: true
@@ -223,11 +223,11 @@
             tasks_from: uninstall
           tags: [cert_manager, tls]
 
-        - name: Uninstall local-path provisioner after persistent storage reclaim
+        - name: Uninstall NFS CSI driver after persistent storage reclaim
           ansible.builtin.import_role:
-            name: dev_infra.deployment.local_path_provisioner
+            name: dev_infra.deployment.csi_driver_nfs
             tasks_from: uninstall
-          tags: [local_path_provisioner, storage]
+          tags: [csi_driver_nfs, storage]
       delegate_to: localhost
       become: false
       run_once: true

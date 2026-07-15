@@ -1,0 +1,21 @@
+---
+- name: Restart NFS CSI controller
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_restart
+  vars:
+    dev_infra_deployment_restart_kind: Deployment
+    dev_infra_deployment_restart_namespace: "{{ csi_driver_nfs_namespace }}"
+    dev_infra_deployment_restart_name: "{{ csi_driver_nfs_controller_name }}"
+
+- name: Restart NFS CSI node DaemonSet
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: rollout_restart
+  vars:
+    dev_infra_deployment_restart_kind: DaemonSet
+    dev_infra_deployment_restart_namespace: "{{ csi_driver_nfs_namespace }}"
+    dev_infra_deployment_restart_name: "{{ csi_driver_nfs_node_name }}"
+
+- name: Verify NFS CSI after restart
+  ansible.builtin.import_tasks: verify.yml

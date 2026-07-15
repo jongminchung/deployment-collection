@@ -29,6 +29,23 @@
     - "{{ role_path }}/files/k8s/values/tls.yaml"
     - "{{ role_path }}/files/k8s/values/security-config.yaml"
 
+- name: Merge OpenSearch storage settings
+  ansible.builtin.set_fact:
+    dev_infra_deployment_opensearch_release_values: >-
+      {{
+        dev_infra_deployment_opensearch_release_values
+        | combine(
+            {'persistence': {'storageClass': dev_infra_deployment_storage_class}},
+            recursive=true
+          )
+      }}
+
+- name: Validate OpenSearch storage settings
+  ansible.builtin.assert:
+    that:
+      - dev_infra_deployment_storage_class | length > 0
+    fail_msg: OpenSearch requires a non-empty dev_infra_deployment_storage_class.
+
 - name: Merge sensitive OpenSearch Helm values
   ansible.builtin.set_fact:
     dev_infra_deployment_opensearch_release_values: >-

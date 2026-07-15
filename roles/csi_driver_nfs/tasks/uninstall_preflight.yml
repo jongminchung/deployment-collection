@@ -1,0 +1,65 @@
+---
+- name: Read NFS StorageClass before uninstall
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: resource_info
+  vars:
+    dev_infra_deployment_resource_api_version: storage.k8s.io/v1
+    dev_infra_deployment_resource_kind: StorageClass
+    dev_infra_deployment_resource_name: "{{ dev_infra_deployment_storage_class }}"
+
+- name: Verify NFS StorageClass ownership before uninstall
+  ansible.builtin.assert:
+    that:
+      - >-
+        dev_infra_deployment_resource_info_result.resources | length == 0
+        or (
+          csi_driver_nfs_storage_class.metadata.labels['app.kubernetes.io/managed-by']
+          | default('') == 'dev-infra-deployment'
+          and
+          csi_driver_nfs_storage_class.metadata.labels['dev-infra.deployment/ownership']
+          | default('') == 'exclusive'
+        )
+    fail_msg: StorageClass/{{ dev_infra_deployment_storage_class }} is not Collection-owned.
+  vars:
+    csi_driver_nfs_storage_class:
+      "{{ (dev_infra_deployment_resource_info_result.resources | first) | default({}, true) }}"
+
+- name: Read NFS CSIDriver before uninstall
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: resource_info
+  vars:
+    dev_infra_deployment_resource_api_version: storage.k8s.io/v1
+    dev_infra_deployment_resource_kind: CSIDriver
+    dev_infra_deployment_resource_name: "{{ csi_driver_nfs_driver_name }}"
+
+- name: Verify NFS CSIDriver ownership before uninstall
+  ansible.builtin.assert:
+    that:
+      - >-
+        dev_infra_deployment_resource_info_result.resources | length == 0
+        or (
+          csi_driver_nfs_driver.metadata.labels['app.kubernetes.io/managed-by']
+          | default('') == 'dev-infra-deployment'
+          and
+          csi_driver_nfs_driver.metadata.labels['dev-infra.deployment/ownership']
+          | default('') == 'exclusive'
+        )
+    fail_msg: CSIDriver/{{ csi_driver_nfs_driver_name }} is not Collection-owned.
+  vars:
+    csi_driver_nfs_driver:
+      "{{ (dev_infra_deployment_resource_info_result.resources | first) | default({}, true) }}"
+
+- name: Verify NFS storage is used only by Collection-owned namespaces
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_storage_reclaim
+  vars:
+    dev_infra_deployment_reclaim_storage_class: "{{ dev_infra_deployment_storage_class }}"
+    dev_infra_deployment_reclaim_preflight_only: true
+    dev_infra_deployment_reclaim_allowed_namespaces:
+      - "{{ dev_infra_deployment_namespace | default('gabiacloud-s3') }}"
+      - "{{ apisix_namespace | default('apisix') }}"
+      - "{{ dev_infra_deployment_vault_namespace | default('vault') }}"
+      - "{{ csi_driver_nfs_namespace }}"

@@ -1,0 +1,44 @@
+---
+- name: Wait for NFS persistent storage reclaim
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: wait_storage_reclaim
+  vars:
+    dev_infra_deployment_reclaim_storage_class: "{{ dev_infra_deployment_storage_class }}"
+    dev_infra_deployment_reclaim_timeout_seconds: "{{ csi_driver_nfs_timeout_seconds }}"
+
+- name: Uninstall NFS CSI Helm release
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_uninstall
+  vars:
+    dev_infra_deployment_helm_release_name: "{{ csi_driver_nfs_release_name }}"
+    dev_infra_deployment_helm_namespace: "{{ csi_driver_nfs_namespace }}"
+    dev_infra_deployment_helm_timeout: "{{ csi_driver_nfs_timeout }}"
+
+- name: Delete residual NFS StorageClass
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+    state: absent
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ dev_infra_deployment_storage_class }}"
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+- name: Delete residual NFS CSIDriver
+  kubernetes.core.k8s:
+    kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+    state: absent
+    api_version: storage.k8s.io/v1
+    kind: CSIDriver
+    name: "{{ csi_driver_nfs_driver_name }}"
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+- name: Delete NFS CSI namespace
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: delete_namespace
+  vars:
+    dev_infra_deployment_delete_namespace: "{{ csi_driver_nfs_namespace }}"

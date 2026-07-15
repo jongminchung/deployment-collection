@@ -72,6 +72,11 @@
                   }
                 }
               }
+            },
+            'etcd': {
+              'persistence': {
+                'storageClass': dev_infra_deployment_storage_class
+              }
             }
           },
           recursive=true
@@ -90,6 +95,7 @@
       - apisix_chart_repo_name | length > 0
       - apisix_chart_repo_url | length > 0
       - apisix_gateway_api_install_url | length > 0
+      - dev_infra_deployment_storage_class | length > 0
       - apisix_gateway_class_name | length > 0
       - apisix_gateway_name | length > 0
       - apisix_admin_key | length > 0

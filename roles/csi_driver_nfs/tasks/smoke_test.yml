@@ -1,0 +1,237 @@
+---
+- name: Run NFS CSI dynamic provisioning smoke test
+  block:
+    - name: Delete stale NFS CSI smoke PVC
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        state: absent
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        name: "{{ csi_driver_nfs_smoke_pvc_name }}"
+        wait: true
+        wait_timeout: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Wait for stale NFS CSI smoke PV reclaim
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        api_version: v1
+        kind: PersistentVolume
+      register: csi_driver_nfs_stale_smoke_pvs
+      until: >-
+        csi_driver_nfs_stale_smoke_pvs.resources
+        | selectattr('spec.claimRef', 'defined')
+        | selectattr('spec.claimRef.namespace', 'defined')
+        | selectattr('spec.claimRef.namespace', 'equalto', csi_driver_nfs_namespace)
+        | selectattr('spec.claimRef.name', 'defined')
+        | selectattr('spec.claimRef.name', 'equalto', csi_driver_nfs_smoke_pvc_name)
+        | list | length == 0
+      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      delay: 5
+      changed_when: false
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Create first NFS CSI smoke PVC
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        state: present
+        definition: "{{ csi_driver_nfs_smoke_pvc_definition }}"
+        apply: true
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Wait for first NFS CSI smoke PVC binding
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        name: "{{ csi_driver_nfs_smoke_pvc_name }}"
+      register: csi_driver_nfs_first_smoke_pvc
+      until: >-
+        csi_driver_nfs_first_smoke_pvc.resources | length == 1
+        and csi_driver_nfs_first_smoke_pvc.resources[0].status.phase | default('') == 'Bound'
+      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      delay: 5
+      changed_when: false
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Record first NFS CSI smoke PV name
+      ansible.builtin.set_fact:
+        csi_driver_nfs_first_smoke_pv_name:
+          "{{ csi_driver_nfs_first_smoke_pvc.resources[0].spec.volumeName }}"
+
+    - name: Write and read first NFS CSI smoke marker
+      ansible.builtin.include_role:
+        name: dev_infra.deployment.k8s_deployment
+        tasks_from: run_job
+      vars:
+        dev_infra_deployment_job_name: "{{ csi_driver_nfs_smoke_job_name }}"
+        dev_infra_deployment_job_namespace: "{{ csi_driver_nfs_namespace }}"
+        dev_infra_deployment_job_timeout_seconds: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+        dev_infra_deployment_job_definition:
+          "{{ csi_driver_nfs_smoke_job_definition | combine(
+                {'spec': {'template': {'spec': {'containers': [
+                  csi_driver_nfs_smoke_container
+                  | combine({'args': [csi_driver_nfs_first_smoke_command]})
+                ]}}}}, recursive=true) }}"
+
+    - name: Delete first NFS CSI smoke PVC
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        state: absent
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        name: "{{ csi_driver_nfs_smoke_pvc_name }}"
+        wait: true
+        wait_timeout: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Wait for first NFS CSI smoke PV deletion
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        api_version: v1
+        kind: PersistentVolume
+        name: "{{ csi_driver_nfs_first_smoke_pv_name }}"
+      register: csi_driver_nfs_first_smoke_pv
+      until: csi_driver_nfs_first_smoke_pv.resources | length == 0
+      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      delay: 5
+      changed_when: false
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Recreate NFS CSI smoke PVC
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        state: present
+        definition: "{{ csi_driver_nfs_smoke_pvc_definition }}"
+        apply: true
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Wait for recreated NFS CSI smoke PVC binding
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        name: "{{ csi_driver_nfs_smoke_pvc_name }}"
+      register: csi_driver_nfs_second_smoke_pvc
+      until: >-
+        csi_driver_nfs_second_smoke_pvc.resources | length == 1
+        and csi_driver_nfs_second_smoke_pvc.resources[0].status.phase | default('') == 'Bound'
+      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      delay: 5
+      changed_when: false
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Verify NFS CSI deleted the first marker and supports non-root I/O
+      ansible.builtin.include_role:
+        name: dev_infra.deployment.k8s_deployment
+        tasks_from: run_job
+      vars:
+        dev_infra_deployment_job_name: "{{ csi_driver_nfs_smoke_job_name }}"
+        dev_infra_deployment_job_namespace: "{{ csi_driver_nfs_namespace }}"
+        dev_infra_deployment_job_timeout_seconds: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+        dev_infra_deployment_job_definition:
+          "{{ csi_driver_nfs_smoke_job_definition | combine(
+                {'spec': {'template': {'spec': {'containers': [
+                  csi_driver_nfs_smoke_container
+                  | combine({'args': [csi_driver_nfs_second_smoke_command]})
+                ]}}}}, recursive=true) }}"
+  always:
+    - name: Delete NFS CSI smoke PVC after verification
+      kubernetes.core.k8s:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        state: absent
+        api_version: v1
+        kind: PersistentVolumeClaim
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        name: "{{ csi_driver_nfs_smoke_pvc_name }}"
+        wait: true
+        wait_timeout: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Wait for NFS CSI smoke PV cleanup
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ dev_infra_deployment_control_node_kubeconfig_path }}"
+        api_version: v1
+        kind: PersistentVolume
+      register: csi_driver_nfs_smoke_cleanup_pvs
+      until: >-
+        csi_driver_nfs_smoke_cleanup_pvs.resources
+        | selectattr('spec.claimRef', 'defined')
+        | selectattr('spec.claimRef.namespace', 'defined')
+        | selectattr('spec.claimRef.namespace', 'equalto', csi_driver_nfs_namespace)
+        | selectattr('spec.claimRef.name', 'defined')
+        | selectattr('spec.claimRef.name', 'equalto', csi_driver_nfs_smoke_pvc_name)
+        | list | length == 0
+      retries: "{{ (csi_driver_nfs_smoke_timeout_seconds / 5) | round(0, 'ceil') | int }}"
+      delay: 5
+      changed_when: false
+      vars:
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  vars:
+    csi_driver_nfs_smoke_pvc_definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: "{{ csi_driver_nfs_smoke_pvc_name }}"
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        labels:
+          app.kubernetes.io/managed-by: dev-infra-deployment
+      spec:
+        accessModes: [ReadWriteMany]
+        storageClassName: "{{ dev_infra_deployment_storage_class }}"
+        resources:
+          requests:
+            storage: 1Mi
+    csi_driver_nfs_smoke_job_definition:
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: "{{ csi_driver_nfs_smoke_job_name }}"
+        namespace: "{{ csi_driver_nfs_namespace }}"
+        labels:
+          app.kubernetes.io/managed-by: dev-infra-deployment
+      spec:
+        backoffLimit: 0
+        activeDeadlineSeconds: "{{ csi_driver_nfs_smoke_timeout_seconds }}"
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/managed-by: dev-infra-deployment
+          spec:
+            restartPolicy: Never
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1001
+              runAsGroup: 1001
+              fsGroup: 1001
+            volumes:
+              - name: data
+                persistentVolumeClaim:
+                  claimName: "{{ csi_driver_nfs_smoke_pvc_name }}"
+    csi_driver_nfs_smoke_container:
+      name: smoke
+      image: "{{ csi_driver_nfs_smoke_image }}"
+      imagePullPolicy: IfNotPresent
+      command: [/bin/sh, -c]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+    csi_driver_nfs_first_smoke_command: >-
+      set -eu; rm -f /data/smoke-marker; printf '%s' first-pass > /data/smoke-marker;
+      sync; test "$(cat /data/smoke-marker)" = first-pass
+    csi_driver_nfs_second_smoke_command: >-
+      set -eu; test ! -e /data/smoke-marker; printf '%s' second-pass > /data/smoke-marker;
+      sync; test "$(cat /data/smoke-marker)" = second-pass

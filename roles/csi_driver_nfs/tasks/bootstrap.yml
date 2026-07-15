@@ -1,0 +1,91 @@
+---
+- name: Validate NFS CSI settings
+  ansible.builtin.assert:
+    that:
+      - dev_infra_deployment_storage_class | length > 0
+      - csi_driver_nfs_server | length > 0
+      - csi_driver_nfs_share | length > 0
+      - csi_driver_nfs_share is match('^/.*')
+      - csi_driver_nfs_sub_dir == '${pvc.metadata.namespace}/${pvc.metadata.name}'
+      - csi_driver_nfs_mount_permissions is match('^0[0-7]{3}$')
+      - csi_driver_nfs_mount_options is iterable
+      - csi_driver_nfs_mount_options is not string
+      - csi_driver_nfs_mount_options | length > 0
+      - csi_driver_nfs_reclaim_policy == 'Delete'
+      - csi_driver_nfs_on_delete == 'delete'
+      - csi_driver_nfs_namespace | length > 0
+      - csi_driver_nfs_release_name | length > 0
+      - csi_driver_nfs_repo_name | length > 0
+      - csi_driver_nfs_repo_url | length > 0
+      - csi_driver_nfs_chart_ref | length > 0
+      - csi_driver_nfs_chart_version | string | length > 0
+      - csi_driver_nfs_driver_name == 'nfs.csi.k8s.io'
+      - csi_driver_nfs_kubelet_dir == '/var/lib/kubelet'
+      - csi_driver_nfs_helm_values is mapping
+    fail_msg: NFS CSI driver role settings are invalid.
+  tags: [always, validate]
+
+- name: Ensure NFS CSI namespace exists
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: ensure_namespace
+  vars:
+    dev_infra_deployment_target_namespace: "{{ csi_driver_nfs_namespace }}"
+
+- name: Configure NFS CSI Helm repository
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_repo
+  vars:
+    dev_infra_deployment_helm_repo_name: "{{ csi_driver_nfs_repo_name }}"
+    dev_infra_deployment_helm_repo_url: "{{ csi_driver_nfs_repo_url }}"
+
+- name: Install or upgrade NFS CSI Helm release
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: helm_release
+  vars:
+    dev_infra_deployment_helm_release_name: "{{ csi_driver_nfs_release_name }}"
+    dev_infra_deployment_helm_chart_ref: "{{ csi_driver_nfs_chart_ref }}"
+    dev_infra_deployment_helm_chart_version: "{{ csi_driver_nfs_chart_version }}"
+    dev_infra_deployment_helm_namespace: "{{ csi_driver_nfs_namespace }}"
+    dev_infra_deployment_helm_release_values: "{{ csi_driver_nfs_helm_values }}"
+    dev_infra_deployment_helm_wait: true
+    dev_infra_deployment_helm_timeout: "{{ csi_driver_nfs_timeout }}"
+
+- name: Mark NFS StorageClass as Collection-owned
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: patch_resource
+  vars:
+    dev_infra_deployment_patch_api_version: storage.k8s.io/v1
+    dev_infra_deployment_patch_kind: StorageClass
+    dev_infra_deployment_patch_name: "{{ dev_infra_deployment_storage_class }}"
+    dev_infra_deployment_patch_definition:
+      metadata:
+        labels:
+          app.kubernetes.io/managed-by: dev-infra-deployment
+          dev-infra.deployment/ownership: exclusive
+  when: not ansible_check_mode
+
+- name: Mark NFS CSIDriver as Collection-owned
+  ansible.builtin.include_role:
+    name: dev_infra.deployment.k8s_deployment
+    tasks_from: patch_resource
+  vars:
+    dev_infra_deployment_patch_api_version: storage.k8s.io/v1
+    dev_infra_deployment_patch_kind: CSIDriver
+    dev_infra_deployment_patch_name: "{{ csi_driver_nfs_driver_name }}"
+    dev_infra_deployment_patch_definition:
+      metadata:
+        labels:
+          app.kubernetes.io/managed-by: dev-infra-deployment
+          dev-infra.deployment/ownership: exclusive
+  when: not ansible_check_mode
+
+- name: Verify NFS CSI after bootstrap
+  ansible.builtin.import_tasks: verify.yml
+
+- name: Verify NFS dynamic provisioning and delete behavior
+  ansible.builtin.import_tasks: smoke_test.yml
+  when: not ansible_check_mode

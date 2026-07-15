@@ -12,11 +12,11 @@
   tasks:
     - name: Restart Kubernetes platform and application workloads from the Ansible control node
       block:
-        - name: Restart local-path provisioner
+        - name: Restart NFS CSI driver
           ansible.builtin.import_role:
-            name: dev_infra.deployment.local_path_provisioner
+            name: dev_infra.deployment.csi_driver_nfs
             tasks_from: restart
-          tags: [local_path_provisioner, storage]
+          tags: [csi_driver_nfs, storage]
 
         - name: Restart cert-manager
           ansible.builtin.import_role:

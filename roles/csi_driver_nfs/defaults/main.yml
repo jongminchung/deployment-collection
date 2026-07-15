@@ -1,0 +1,59 @@
+---
+dev_infra_deployment_storage_class: nfs-csi
+csi_driver_nfs_server: ""
+csi_driver_nfs_share: ""
+csi_driver_nfs_sub_dir: '${pvc.metadata.namespace}/${pvc.metadata.name}'
+csi_driver_nfs_mount_permissions: "0777"
+csi_driver_nfs_mount_options:
+  - nfsvers=4.1
+  - hard
+csi_driver_nfs_reclaim_policy: Delete
+csi_driver_nfs_on_delete: delete
+csi_driver_nfs_default_class: true
+csi_driver_nfs_namespace: nfs-csi
+csi_driver_nfs_release_name: csi-driver-nfs
+csi_driver_nfs_repo_name: csi-driver-nfs
+csi_driver_nfs_repo_url: https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
+csi_driver_nfs_chart_ref: csi-driver-nfs/csi-driver-nfs
+csi_driver_nfs_chart_version: 4.13.2
+csi_driver_nfs_driver_name: nfs.csi.k8s.io
+csi_driver_nfs_kubelet_dir: /var/lib/kubelet
+csi_driver_nfs_controller_name: csi-nfs-controller
+csi_driver_nfs_node_name: csi-nfs-node
+csi_driver_nfs_timeout: 5m
+csi_driver_nfs_timeout_seconds: 300
+csi_driver_nfs_smoke_pvc_name: csi-driver-nfs-smoke
+csi_driver_nfs_smoke_job_name: csi-driver-nfs-smoke
+csi_driver_nfs_smoke_image: docker.io/busybox:1.36
+csi_driver_nfs_smoke_timeout_seconds: 180
+csi_driver_nfs_helm_values:
+  customLabels:
+    dev-infra.deployment/ownership: exclusive
+  driver:
+    name: "{{ csi_driver_nfs_driver_name }}"
+    mountPermissions: 0
+  feature:
+    enableFSGroupPolicy: true
+    enableInlineVolume: false
+  kubeletDir: "{{ csi_driver_nfs_kubelet_dir }}"
+  controller:
+    replicas: 1
+    runOnControlPlane: true
+    defaultOnDeletePolicy: "{{ csi_driver_nfs_on_delete }}"
+  externalSnapshotter:
+    enabled: false
+  storageClass:
+    create: true
+    name: "{{ dev_infra_deployment_storage_class }}"
+    annotations:
+      storageclass.kubernetes.io/is-default-class:
+        "{{ csi_driver_nfs_default_class | bool | ternary('true', 'false') }}"
+    parameters:
+      server: "{{ csi_driver_nfs_server }}"
+      share: "{{ csi_driver_nfs_share }}"
+      subDir: "{{ csi_driver_nfs_sub_dir }}"
+      mountPermissions: "{{ csi_driver_nfs_mount_permissions }}"
+      onDelete: "{{ csi_driver_nfs_on_delete }}"
+    reclaimPolicy: "{{ csi_driver_nfs_reclaim_policy }}"
+    volumeBindingMode: Immediate
+    mountOptions: "{{ csi_driver_nfs_mount_options }}"

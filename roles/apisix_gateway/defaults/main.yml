@@ -80,5 +80,4 @@ apisix_helm_values:
             name: apisix-admin
             port: 9180
   etcd:
-    persistence:
-      storageClass: local-path
+    persistence: {}

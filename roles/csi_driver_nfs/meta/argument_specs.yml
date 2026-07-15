@@ -1,0 +1,47 @@
+---
+argument_specs:
+  bootstrap:
+    short_description: Bootstrap or update the NFS CSI driver and StorageClass.
+    options:
+      dev_infra_deployment_storage_class:
+        type: str
+        required: true
+      csi_driver_nfs_server:
+        type: str
+        required: true
+      csi_driver_nfs_share:
+        type: str
+        required: true
+      csi_driver_nfs_sub_dir:
+        type: str
+        required: true
+      csi_driver_nfs_mount_permissions:
+        type: str
+        required: true
+      csi_driver_nfs_mount_options:
+        type: list
+        elements: str
+        required: true
+      csi_driver_nfs_reclaim_policy:
+        type: str
+        choices: [Delete]
+        required: true
+      csi_driver_nfs_on_delete:
+        type: str
+        choices: [delete]
+        required: true
+      csi_driver_nfs_default_class:
+        type: bool
+        required: true
+  restart:
+    short_description: Restart NFS CSI controller and node workloads.
+    options: {}
+  uninstall_preflight:
+    short_description: Validate NFS CSI ownership and consumers before removal.
+    options: {}
+  uninstall:
+    short_description: Remove NFS CSI resources after storage reclaim.
+    options: {}
+  verify:
+    short_description: Verify NFS CSI workload and resource readiness.
+    options: {}
