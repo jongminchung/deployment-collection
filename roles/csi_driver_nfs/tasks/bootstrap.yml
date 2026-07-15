@@ -21,6 +21,7 @@
       - csi_driver_nfs_chart_version | string | length > 0
       - csi_driver_nfs_driver_name == 'nfs.csi.k8s.io'
       - csi_driver_nfs_kubelet_dir == '/var/lib/kubelet'
+      - csi_driver_nfs_post_renderer_path | length > 0
       - csi_driver_nfs_helm_values is mapping
       - csi_driver_nfs_helm_values.controller.replicas | int == 1
       - csi_driver_nfs_helm_values.controller.runOnControlPlane | bool
@@ -54,38 +55,9 @@
     dev_infra_deployment_helm_chart_version: "{{ csi_driver_nfs_chart_version }}"
     dev_infra_deployment_helm_namespace: "{{ csi_driver_nfs_namespace }}"
     dev_infra_deployment_helm_release_values: "{{ csi_driver_nfs_helm_values }}"
+    dev_infra_deployment_helm_post_renderer: "{{ csi_driver_nfs_post_renderer_path }}"
     dev_infra_deployment_helm_wait: true
     dev_infra_deployment_helm_timeout: "{{ csi_driver_nfs_timeout }}"
-
-- name: Mark NFS StorageClass as Collection-owned
-  ansible.builtin.include_role:
-    name: dev_infra.deployment.k8s_deployment
-    tasks_from: patch_resource
-  vars:
-    dev_infra_deployment_patch_api_version: storage.k8s.io/v1
-    dev_infra_deployment_patch_kind: StorageClass
-    dev_infra_deployment_patch_name: "{{ dev_infra_deployment_storage_class }}"
-    dev_infra_deployment_patch_definition:
-      metadata:
-        labels:
-          app.kubernetes.io/managed-by: dev-infra-deployment
-          dev-infra.deployment/ownership: exclusive
-  when: not ansible_check_mode
-
-- name: Mark NFS CSIDriver as Collection-owned
-  ansible.builtin.include_role:
-    name: dev_infra.deployment.k8s_deployment
-    tasks_from: patch_resource
-  vars:
-    dev_infra_deployment_patch_api_version: storage.k8s.io/v1
-    dev_infra_deployment_patch_kind: CSIDriver
-    dev_infra_deployment_patch_name: "{{ csi_driver_nfs_driver_name }}"
-    dev_infra_deployment_patch_definition:
-      metadata:
-        labels:
-          app.kubernetes.io/managed-by: dev-infra-deployment
-          dev-infra.deployment/ownership: exclusive
-  when: not ansible_check_mode
 
 - name: Verify NFS CSI after bootstrap
   ansible.builtin.import_tasks: verify.yml

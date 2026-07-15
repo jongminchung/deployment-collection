@@ -14,9 +14,6 @@
       - >-
         dev_infra_deployment_resource_info_result.resources | length == 0
         or (
-          csi_driver_nfs_storage_class.metadata.labels['app.kubernetes.io/managed-by']
-          | default('') == 'dev-infra-deployment'
-          and
           csi_driver_nfs_storage_class.metadata.labels['dev-infra.deployment/ownership']
           | default('') == 'exclusive'
         )
@@ -40,9 +37,6 @@
       - >-
         dev_infra_deployment_resource_info_result.resources | length == 0
         or (
-          csi_driver_nfs_driver.metadata.labels['app.kubernetes.io/managed-by']
-          | default('') == 'dev-infra-deployment'
-          and
           csi_driver_nfs_driver.metadata.labels['dev-infra.deployment/ownership']
           | default('') == 'exclusive'
         )

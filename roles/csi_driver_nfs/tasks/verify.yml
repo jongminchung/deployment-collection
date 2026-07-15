@@ -47,9 +47,6 @@
         csi_driver_nfs_mount_options
         | difference(csi_driver_nfs_storage_class.mountOptions | default([])) | length == 0
       - >-
-        csi_driver_nfs_storage_class.metadata.labels['app.kubernetes.io/managed-by']
-        | default('') == 'dev-infra-deployment'
-      - >-
         csi_driver_nfs_storage_class.metadata.labels['dev-infra.deployment/ownership']
         | default('') == 'exclusive'
       - >-
@@ -76,9 +73,6 @@
   ansible.builtin.assert:
     that:
       - dev_infra_deployment_resource_info_result.resources | length == 1
-      - >-
-        csi_driver_nfs_driver.metadata.labels['app.kubernetes.io/managed-by']
-        | default('') == 'dev-infra-deployment'
       - >-
         csi_driver_nfs_driver.metadata.labels['dev-infra.deployment/ownership']
         | default('') == 'exclusive'
